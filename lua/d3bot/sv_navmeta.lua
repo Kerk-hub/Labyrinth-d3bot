@@ -24,7 +24,6 @@ setmetatable( CNavLink, { __call = CNavLink.new } )
 
 D3bot.CNavLink = CNavLink
 
----@class GCNavArea
 local CNavArea = FindMetaTable( "CNavArea" )
 
 local NavAreaMetaData = NavAreaMetaData or {}
@@ -90,19 +89,19 @@ hook.Add( "InitPostEntity", "D3bot.SetupNavLinks", function()
 			end
 
 			if area:HasAttributes( NAV_MESH_JUMP ) then
-				areaData.Params.Jump, areaData.Params.JumpTo = "Always", "Always"
+				areaData.Params.Jump, areaData.Params.JumpTo = "Always"
 			end
 
 			if area:HasAttributes( NAV_MESH_NO_JUMP ) then
-				areaData.Params.Jump, areaData.Params.JumpTo = "Disabled", "Disabled"
+				areaData.Params.Jump, areaData.Params.JumpTo = "Disabled"
 			end
 
 			if area:HasAttributes( NAV_MESH_CROUCH ) then
-				areaData.Params.Duck, areaData.Params.DuckTo = "Always", "Always"
+				areaData.Params.Duck, areaData.Params.DuckTo = "Always"
 			end
 
 			if area:HasAttributes( NAV_MESH_STAND ) then
-				areaData.Params.Duck, areaData.Params.DuckTo = "Disabled", "Disabled"
+				areaData.Params.Duck, areaData.Params.DuckTo = "Disabled"
 			end
 
 			if area:HasAttributes( NAV_MESH_AVOID ) then
@@ -110,7 +109,7 @@ hook.Add( "InitPostEntity", "D3bot.SetupNavLinks", function()
 			end
 
 			if area:HasAttributes( NAV_MESH_DONT_HIDE ) then
-				areaData.Params.Aim, areaData.Params.AimTo = "Straight", "Straight"
+				areaData.Params.Aim, areaData.Params.AimTo = "Straight"
 			end
 
 			if area:HasAttributes( NAV_MESH_FUNC_COST ) then

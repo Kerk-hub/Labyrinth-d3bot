@@ -22,10 +22,10 @@ function D3bot.OpenMeshingWindow()
 	D3bot.MeshingWindow = dFrame
 	
 	-- Store window position every now and then
-	timer.Remove(D3bot.BotHooksId.."MeshingWindowTimer")
-	timer.Create(D3bot.BotHooksId.."MeshingWindowTimer", 10, 0, function()
+	timer.Remove(D3bot.BotHooksId .. "MeshingWindowTimer")
+	timer.Create(D3bot.BotHooksId .. "MeshingWindowTimer", 10, 0, function()
 		if not IsValid(dFrame) then
-			timer.Remove(D3bot.BotHooksId.."MeshingWindowTimer")
+			timer.Remove(D3bot.BotHooksId .. "MeshingWindowTimer")
 			return
 		end
 		local x, y, width, height = dFrame:GetBounds()

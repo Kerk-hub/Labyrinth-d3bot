@@ -1,5 +1,5 @@
-D3bot.Handlers.Survivor_Fallback = D3bot.Handlers.Survivor_Fallback or {}
-local HANDLER = D3bot.Handlers.Survivor_Fallback
+-- D3bot.Handlers.Survivor_Fallback = D3bot.Handlers.Survivor_Fallback or {}
+local HANDLER = {} -- D3bot.Handlers.Survivor_Fallback
 
 HANDLER.angOffshoot = 20
 
@@ -8,16 +8,12 @@ function HANDLER.SelectorFunction(zombieClassName, team)
 	return team == TEAM_SURVIVOR
 end
 
----Updates the bot move data every frame.
----@param bot GPlayer|table
----@param cmd GCUserCmd
 function HANDLER.UpdateBotCmdFunction(bot, cmd)
 	cmd:ClearButtons()
 	cmd:ClearMovement()
 	
 	-- Fix knocked down bots from sliding around. (Workaround for the NoxiousNet codebase, as ply:Freeze() got removed from status_knockdown, status_revive, ...)
-	-- Bug: We need to check the type of bot.Revive, as there is probably a bug in ZS that sets this value to a function in stead of a status entity
-	if bot.KnockedDown and IsValid(bot.KnockedDown) or bot.Revive and type(bot.Revive) ~= "function" and IsValid(bot.Revive) then
+	if bot.KnockedDown and IsValid(bot.KnockedDown) or bot.Revive and IsValid(bot.Revive) then
 		return
 	end
 	
@@ -26,10 +22,10 @@ function HANDLER.UpdateBotCmdFunction(bot, cmd)
 	local botPos = bot:GetPos()
 	
 	local result, actions, forwardSpeed, sideSpeed, upSpeed, aimAngle, minorStuck, majorStuck, facesHindrance = D3bot.Basics.WalkAttackAuto(bot)
-	if result and math.abs(forwardSpeed or 0) > 30 then
+	if result and math.abs(forwardSpeed) > 30 then
 		actions.Attack = false
 	else
-		result, actions, forwardSpeed, sideSpeed, upSpeed, aimAngle = D3bot.Basics.AimAndShoot(bot, mem.AttackTgtOrNil, mem.MaxShootingDistance) -- TODO: Make bots walk backwards while shooting
+		result, actions, forwardSpeed, sideSpeed, upSpeed, aimAngle = D3bot.Basics.AimAndShoot(bot, mem.AttackTgtOrNil, mem.maxShootingDistance) -- TODO: Make bots walk backwards while shooting
 		if not result then
 			result, actions, forwardSpeed, sideSpeed, upSpeed, aimAngle = D3bot.Basics.LookAround(bot)
 			if not result then return end
@@ -66,8 +62,6 @@ function HANDLER.UpdateBotCmdFunction(bot, cmd)
 	if buttons then cmd:SetButtons(buttons) end
 end
 
----Called every frame.
----@param bot GPlayer
 function HANDLER.ThinkFunction(bot)
 	local mem = bot.D3bot_Mem
 	local botPos = bot:GetPos()
@@ -91,7 +85,7 @@ function HANDLER.ThinkFunction(bot)
 			-- Check if undead can see/walk to bot, and then calculate escape path.
 			if mem.AttackTgtOrNil:D3bot_CanSeeTarget(nil, bot) and (not mem.NextNodeOrNil or (mem.lastEscapePath or 0) < CurTime() - 2) then
 				mem.lastEscapePath = CurTime()
-				local escapePath = HANDLER.FindEscapePath(bot, D3bot.MapNavMesh:GetNearestNodeOrNil(botPos), closerEnemies)
+				escapePath = HANDLER.FindEscapePath(bot, D3bot.MapNavMesh:GetNearestNodeOrNil(botPos), closerEnemies)
 				if escapePath then
 					--D3bot.Debug.DrawPath(GetPlayerByName("D3"), escapePath, nil, nil, true)
 					mem.holdPathTime = CurTime() + 2
@@ -104,7 +98,7 @@ function HANDLER.ThinkFunction(bot)
 			end
 			if not mem.NextNodeOrNil and ((mem.nextHumanPath or 0) < CurTime() or bot:WaterLevel() == 3) then
 				mem.nextHumanPath = CurTime() + 10 + math.random() * 20
-				local path = HANDLER.FindPathToHuman(D3bot.MapNavMesh:GetNearestNodeOrNil(botPos))
+				path = HANDLER.FindPathToHuman(D3bot.MapNavMesh:GetNearestNodeOrNil(botPos))
 				if path then
 					--D3bot.Debug.DrawPath(GetPlayerByName("D3"), path, nil, Color(0, 0, 255), true)
 					mem.holdPathTime = CurTime() + 20
@@ -127,7 +121,7 @@ function HANDLER.ThinkFunction(bot)
 	end
 	if mem.nextUpdatePath and mem.nextUpdatePath < CurTime() or not mem.nextUpdatePath then
 		mem.nextUpdatePath = CurTime() + 0.9 + math.random() * 0.2
-		bot:D3bot_UpdatePath(pathCostFunction, nil) -- This will not do anything as long as there is no target set (TgtOrNil, PosTgtOrNil, NodeTgtOrNil), the real magic happens in this handlers think function.
+		bot:D3bot_UpdatePath(nil, nil) -- This will not do anything as long as there is no target set (TgtOrNil, PosTgtOrNil, NodeTgtOrNil), the real magic happens in this handlers think function.
 	end
 	
 	-- Change held weapon based on target distance
@@ -135,7 +129,7 @@ function HANDLER.ThinkFunction(bot)
 		mem.nextHeldWeaponUpdate = CurTime() + 1 + math.random() * 1
 		local weapons = bot:GetWeapons()
 		local filteredWeapons = {}
-		local bestRating, bestWeapon, bestMaxDistance = 0, nil, nil
+		local bestRating, bestWeapon = 0, nil
 		local enemyDistance = mem.AttackTgtOrNil and mem.AttackTgtOrNil:GetPos():Distance(bot:GetPos()) or 300
 		for _, v in pairs(weapons) do
 			local weaponType, rating, maxDistance = HANDLER.WeaponRatingFunction(v, enemyDistance)
@@ -143,11 +137,7 @@ function HANDLER.ThinkFunction(bot)
 			local ammo = v:Clip1() + bot:GetAmmoCount(ammoType)
 			-- Silly cheat to prevent bots from running out of ammo TODO: Add buy logic
 			if ammo == 0 then
-				if bot:IsBot() then
-					bot:SetAmmo(50, ammoType)
-				else
-					bot:ConCommand("zs_quickbuyammo")
-				end
+				bot:SetAmmo(50, ammoType)
 			end
 			
 			if ammo > 0 and enemyDistance < maxDistance and bestRating < rating and weaponType == HANDLER.Weapon_Types.RANGED then
@@ -156,7 +146,7 @@ function HANDLER.ThinkFunction(bot)
 		end
 		if bestWeapon then
 			bot:SelectWeapon(bestWeapon)
-			mem.MaxShootingDistance = bestMaxDistance
+			mem.maxShootingDistance = bestMaxDistance
 		end
 	end
 	
@@ -180,9 +170,6 @@ function HANDLER.ThinkFunction(bot)
 	end
 end
 
----Called when the bot takes damage.
----@param bot GPlayer
----@param dmg GCTakeDamageInfo
 function HANDLER.OnTakeDamageFunction(bot, dmg)
 	local attacker = dmg:GetAttacker()
 	if not HANDLER.CanBeAttackTgt(bot, attacker) then return end
@@ -193,16 +180,10 @@ function HANDLER.OnTakeDamageFunction(bot, dmg)
 	--bot:Say("help")
 end
 
----Called when the bot damages something.
----@param bot GPlayer -- The bot that caused the damage.
----@param ent GEntity -- The entity that took damage.
----@param dmg GCTakeDamageInfo -- Information about the damage.
-function HANDLER.OnDoDamageFunction(bot, ent, dmg)
+function HANDLER.OnDoDamageFunction(bot, dmg)
 	--bot:Say("Gotcha!")
 end
 
----Called when the bot dies.
----@param bot GPlayer
 function HANDLER.OnDeathFunction(bot)
 	--bot:Say("rip me!")
 end
@@ -259,7 +240,7 @@ function HANDLER.FindEscapePath(bot, startNode, enemies)
 		if node == startNode then
 			local direction = (linkedNode.Pos - node.Pos)
 			directionPenalty = (1 - direction:Dot(escapeDirection)) * 1000
-			--ClDebugOverlay.Line(GetPlayerByName("D3"), node.Pos, linkedNode.Pos, nil, Color(directionPenalty/2000*255, 0, 0), true)
+			--clDebugOverlay.Line(GetPlayerByName("D3"), node.Pos, linkedNode.Pos, nil, Color(directionPenalty/2000*255, 0, 0), true)
 		end
 		local nodeMetadata = D3bot.NodeMetadata[linkedNode]
 		local playerFactorBySurvivors = nodeMetadata and nodeMetadata.PlayerFactorByTeam and nodeMetadata.PlayerFactorByTeam[TEAM_SURVIVOR] or 0
@@ -296,12 +277,12 @@ end
 
 function HANDLER.CanShootTarget(bot, target)
 	if not IsValid(target) then return end
-	local origin = bot:EyePos()
-	local targetPos = target:EyePos()
+	local origin = bot:D3bot_GetViewCenter()
+	local targetPos = target:D3bot_GetViewCenter()
 	local tr = util.TraceLine({
 		start = origin,
 		endpos = targetPos,
-		filter = player.GetAll(),
+		filter = player.GetAllNoCopy(),
 		mask = MASK_SHOT_HULL
 	})
 	return not tr.Hit
@@ -310,7 +291,7 @@ end
 function HANDLER.FacesBarricade(bot)
 	local tr = bot:GetEyeTrace()
 	local entity = tr.Entity
-	local distanceSqr = bot:EyePos():DistToSqr(tr.HitPos)
+	local distanceSqr = bot:D3bot_GetViewCenter():DistToSqr(tr.HitPos)
 	if not IsValid(entity) or not entity:IsNailed() then return end
 	return distanceSqr < 100*100
 end

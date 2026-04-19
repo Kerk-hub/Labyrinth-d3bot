@@ -131,18 +131,11 @@ registerAdminCmd("BotMod", numParam, function(caller, num)
 	local formerZombiesCountAddition = D3bot.ZombiesCountAddition
 	D3bot.ZombiesCountAddition = math.Round(num)
 	local function format(num) return "[formula + (" .. num .. ")]" end
-	if IsValid(caller) then
-		caller:ChatPrint("Zombies count changed from " .. format(formerZombiesCountAddition) .. " to " .. format(D3bot.ZombiesCountAddition) .. ".")
-	else
-		-- If 'botmod' is set via console (or the caller is invalid?), it won't throw an error
-		print("Zombies count changed from " .. format(formerZombiesCountAddition) .. " to " .. format(D3bot.ZombiesCountAddition) .. ".")
-	end
+	caller:ChatPrint("Zombies count changed from " .. format(formerZombiesCountAddition) .. " to " .. format(D3bot.ZombiesCountAddition) .. ".")
 end)
 
 registerSuperadminCmd("ViewMesh", plsParam, function(caller, pls) for k, pl in pairs(pls) do D3bot.SetMapNavMeshUiSubscription(pl, "view") end end)
 registerSuperadminCmd("EditMesh", plsParam, function(caller, pls) for k, pl in pairs(pls) do D3bot.SetMapNavMeshUiSubscription(pl, "edit") pl:AddFlags(FL_NOTARGET) end end)
-registerSuperadminCmd("ViewMeshSpec", plsParam, function(caller, pls) for k, pl in pairs(pls) do D3bot.SetMapNavMeshUiSubscription(pl, "view", true) end end)
-registerSuperadminCmd("EditMeshSpec", plsParam, function(caller, pls) for k, pl in pairs(pls) do D3bot.SetMapNavMeshUiSubscription(pl, "edit", true) pl:AddFlags(FL_NOTARGET) end end)
 registerSuperadminCmd("HideMesh", plsParam, function(caller, pls) for k, pl in pairs(pls) do D3bot.SetMapNavMeshUiSubscription(pl, nil) pl:RemoveFlags(FL_NOTARGET) end end)
 
 registerSuperadminCmd("SaveMesh", function(caller)
@@ -151,13 +144,11 @@ registerSuperadminCmd("SaveMesh", function(caller)
 end)
 registerSuperadminCmd("ReloadMesh", function(caller)
 	D3bot.LoadMapNavMesh()
-	D3bot.MapNavMesh:InvalidateCache()
 	D3bot.UpdateMapNavMeshUiSubscribers()
 	caller:ChatPrint("Reloaded.")
 end)
 registerSuperadminCmd("GenerateMesh", function(caller)
 	D3bot.GenerateAndConvertNavmesh(caller:GetPos(), caller:IsOnGround(), function()
-		D3bot.MapNavMesh:InvalidateCache()
 		D3bot.UpdateMapNavMeshUiSubscribers()
 	end)
 end)
@@ -171,7 +162,6 @@ registerSuperadminCmd("SetParam", strParam, strParam, optionalStrParam, function
 		D3bot.MapNavMesh.ItemById[D3bot.DeserializeNavMeshItemId(id)]:SetParam(name, serializedNumOrStrOrEmpty)
 		D3bot.lastParamKey = name
 		D3bot.lastParamValue = serializedNumOrStrOrEmpty
-		D3bot.MapNavMesh:InvalidateCache()
 		D3bot.UpdateMapNavMeshUiSubscribers()
 	end, function(errorMsg)
 		caller:ChatPrint("Error. Re-check your parameters.")
@@ -200,9 +190,7 @@ registerSuperadminCmd("ViewPath", plsParam, strParam, strParam, function(caller,
 		caller:ChatPrint("Not all specified nodes exist.")
 		return
 	end
-
-	local abilities = {Walk = true, Jump = 250, Height = 72}
-	local path = D3bot.GetBestMeshPathOrNil(startNode, endNode, nil, nil, abilities)
+	local path = D3bot.GetBestMeshPathOrNil(startNode, endNode)
 	if not path then
 		caller:ChatPrint("Couldn't find any path for the two specified nodes.")
 		return

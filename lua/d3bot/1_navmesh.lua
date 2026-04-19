@@ -1,8 +1,11 @@
+local mathMin = math.min
+local mathMax = math.max
 local mathSqrt = math.sqrt
+local mathAbs = math.abs
 
 return function(lib)
 	local from = lib.From
-
+	
 	lib.NavMeshMeta = { __index = {} }
 	lib.NavMeshItemMeta = { __index = {} }
 	lib.NavMeshNodeMeta = {
@@ -11,73 +14,46 @@ return function(lib)
 	lib.NavMeshLinkMeta = {
 		__index = setmetatable({ Type = "link" }, lib.NavMeshItemMeta),
 		__tostring = function(link) return link.Id end }
-
-	---@class D3Navmesh
-	---@field public ItemById table<any, D3NavmeshItem>
-	---@field public NodeById table<any, D3NavmeshNode>
-	---@field public LinkById table<any, D3NavmeshLink>
-	---@field public Params table<string, number|string>
+	
 	local fallback = lib.NavMeshMeta.__index
-
-	---@class D3NavmeshItem
-	---@field public GetFocusPos function
-	---@field public ShouldDraw function
-	---@field public NavMesh D3Navmesh
-	---@field public Id number|string
-	---@field public Pos GVector
-	---@field public Params table<string, number|string>
 	local itemFallback = lib.NavMeshItemMeta.__index
-
-	---@class D3NavmeshNode : D3NavmeshItem
-	---@field public HasArea boolean
-	---@field public LinkByLinkedNode table<D3NavmeshNode, D3NavmeshLink>
 	local nodeFallback = lib.NavMeshNodeMeta.__index
-
-	---@class D3NavmeshLink : D3NavmeshItem
 	local linkFallback = lib.NavMeshLinkMeta.__index
-
+	
 	lib.BotNodeMinProximitySqr = 40*40
-
+	
 	lib.MapNavMeshNetworkStr = "D3bot Map NavMesh"
-
+	
 	lib.NavMeshItemsSeparator = "\n"
 	lib.NavMeshItemsSeparatorOld = ";"
 	lib.NavMeshItemIdParamsPairSeparator = ":"
 	lib.NavMeshItemParamsSeparator = ","
 	lib.NavMeshItemParamNameNumPairSeparator = "="
 	lib.NavMeshLinkNodesSeparator = "-"
-
+	
 	lib.Params = {
 		Correct = {
-			Jump = { "Disabled", "Always" },
-			JumpTo = { "Disabled", "Always", "Close" },
-			Duck = { "Disabled", "Always" },
-			DuckTo = { "Disabled", "Always", "Close" },
-			Wall = { "Suicide", "Retarget" },
-			See = { "Disabled" },
-			Aim = { "Straight" },
-			AimTo = { "Straight" },
+			Jump = {"Disabled", "Always"},
+			JumpTo = {"Disabled", "Always"},
+			Duck = {"Disabled", "Always"},
+			DuckTo = {"Disabled", "Always"},
+			Wall = {"Suicide", "Retarget"},
+			See = {"Disabled"},
+			Aim = {"Straight"},
+			AimTo = {"Straight"},
 			Cost = {},
-			Condition = { "Unblocked", "Blocked", "MapUnblocked" },
+			Condition = {"Unblocked", "Blocked"},
 			BlockBeforeWave = {},
 			BlockAfterWave = {},
-			Direction = { "Forward", "Backward" },
-			Walking = { "Needed" },
-			Pouncing = { "Needed" },
-			CrabPouncing = { "Needed" },
-			Climbing = { "Needed" },
-			Jumping = { "Needed" },
-			Path = { "Ladder" },
-			Ladder = { "NoDismount" },
-			MaxHeight = {},
+			Direction = {"Forward", "Backward"},
+			Walking = {"Needed"},
+			Pouncing = {"Needed"},
+			Climbing = {"Needed"},
 			DMGPerSecond = {},
-			BotMod = {}
-		},
+			BotMod = {} },
 		Replace = {
-			Unidir = "Direction"
-		}
-	}
-
+			Unidir = "Direction"} }
+	
 	lib.NavmeshParams = {
 		Correct = {
 			BotMod = {},
@@ -87,10 +63,9 @@ return function(lib)
 			ZPM = {},
 			ZPW = {},
 			SPP = {},
-			SCA = {}
-		},
-		Replace = {}
-	}
+			SCA = {} },
+		Replace = {} }
+	
 	function lib.NormalizeParam(name, numOrSerializedNumOrStrOrEmpty)
 		-- Replace
 		for k, v in pairs(lib.Params.Replace) do
@@ -116,7 +91,7 @@ return function(lib)
 		end
 		return name, numOrSerializedNumOrStrOrEmpty
 	end
-
+	
 	function lib.NormalizeNavmeshParam(name, numOrSerializedNumOrStrOrEmpty)
 		-- Replace
 		for k, v in pairs(lib.NavmeshParams.Replace) do
@@ -142,43 +117,29 @@ return function(lib)
 		end
 		return name, numOrSerializedNumOrStrOrEmpty
 	end
-
+	
 	function lib.NewNavMesh() return setmetatable({
 		ItemById = {},
 		NodeById = {},
 		LinkById = {},
-		Params = {} }, lib.NavMeshMeta)
-	end
-	---Generates a new item object.
-	---@param navMesh any
-	---@param id any
-	---@return D3NavmeshItem
+		Params = {} }, lib.NavMeshMeta) end
 	local function newItem(navMesh, id)
 		local r = {
 			NavMesh = navMesh,
 			Id = id,
 			Pos = Vector(),
+			AreaVertices = {},
 			Params = {} }
 		navMesh.ItemById[id] = r
 		return r
 	end
-
-	---Invalidates the cache(s) of the navmesh.
-	---This has to be called after every modification of the navmesh.
-	function fallback:InvalidateCache()
-		for id, link in pairs(lib.MapNavMesh.LinkById) do
-			link.CachedDist = nil -- Used to speed up path finding.
-			link.CachedZDiff = nil
-		end
-	end
-
+	
 	function fallback:ForceGetItem(id) return isnumber(id) and self:ForceGetNode(id) or self:ForceGetLink(id) end
 	function fallback:NewNode() return self:ForceGetNode(#self.ItemById + 1) end
 	function fallback:ForceGetNode(id)
 		local r = self.NodeById[id]
 		if r then return r end
-		---@type D3NavmeshNode
-		local r = setmetatable(newItem(self, id), lib.NavMeshNodeMeta)
+		r = setmetatable(newItem(self, id), lib.NavMeshNodeMeta)
 		r.LinkByLinkedNode = {}
 		self.NodeById[id] = r
 		return r
@@ -200,7 +161,6 @@ return function(lib)
 		local r = nodeA.LinkByLinkedNode[nodeB]
 		if r then return r end
 		local id = nodeA.Id .. lib.NavMeshLinkNodesSeparator .. nodeB.Id
-		---@type D3NavmeshLink
 		r = setmetatable(newItem(self, id), lib.NavMeshLinkMeta)
 		r.Nodes = { nodeA, nodeB }
 		lib.TwoWay(nodeA, nodeB, function(node, linkedNode) node.LinkByLinkedNode[linkedNode] = r end)
@@ -218,7 +178,7 @@ return function(lib)
 		if (name .. (isstring(numOrStr) and numOrStr or "")):find("[^%w_]") then error("Only alphanumeric letters and underscore allowed in name and string values.", 2) end
 		self.Params[name] = numOrStr
 	end
-
+	
 	local function itemParamChanged(item, paramName)
 		local params = item.Params
 		if item.Pos then item.Pos = Vector(params.X or 0, params.Y or 0, params.Z or 0) end
@@ -237,39 +197,12 @@ return function(lib)
 		self.Params[name] = numOrStr
 		itemParamChanged(self, name)
 	end
-
-	---Returns a point that lies on the node's area, and is closest to the given position pos.
-	---It may just return the node's origin if the node doesn't have any area.
-	---@param pos GVector
-	---@return GVector
-	function nodeFallback:GetClosestPointOnArea(pos)
-		local posX, posY, posZ = pos:Unpack()
-
-		local params = self.Params
-		if not self.HasArea then return self.Pos end
-
-		local areaXMin = params.AreaXMin
-		local areaXMax = params.AreaXMax
-		local areaYMin = params.AreaYMin
-		local areaYMax = params.AreaYMax
-
-		-- Clamp values by using comparison and logical operators, as it's faster than math.min(math.max(...), ...) or even math.Clamp(...).
-		posX = (posX > areaXMax and areaXMax) or (posX < areaXMin and areaXMin) or posX
-		posY = (posY > areaYMax and areaYMax) or (posY < areaYMin and areaYMin) or posY
-
-		return Vector(posX, posY, posZ)
-	end
-
+	
 	function nodeFallback:GetFocusPos() return self.Pos end
 	function linkFallback:GetFocusPos() return LerpVector(0.5, self.Nodes[1].Pos, self.Nodes[2].Pos) end
-
+	
 	function linkFallback:GetParam(name) return self.Params[name] or self.Nodes[1].Params[name] or self.Nodes[2].Params[name] end
-
-	---Returns whether pos is inside the area of the given node.
-	---If the node doesn't have any area, it will behave like a circle/sphere with a radius of `BotNodeMinProximity`.
-	---@param pos GVector
-	---@param verticalLimit number? When set we will check against a volume instead, which is defined by the area extruded ±verticalLimit along the z-axis from the node's origin. When set to nil, this function will perform a "2D only" check.
-	---@return boolean
+	
 	function nodeFallback:GetContains(pos, verticalLimit)
 		local z = verticalLimit and math.Clamp(self.Pos.z, pos.z - verticalLimit, pos.z + verticalLimit) or self.Pos.z
 		local pos = Vector(pos.x, pos.y, z)
@@ -277,7 +210,7 @@ return function(lib)
 		local params = self.Params
 		return math.abs(pos.z - self.Pos.z) <= (1) and pos.x >= params.AreaXMin and pos.x <= params.AreaXMax and pos.y >= params.AreaYMin and pos.y <= params.AreaYMax
 	end
-
+	
 	function nodeFallback:IsViewBlocked(eyePos)
 		local tr = util.TraceLine({
 			start = eyePos,
@@ -299,7 +232,7 @@ return function(lib)
 		end
 		return true
 	end
-
+	
 	function fallback:GetCursoredItemOrNil(pl)
 		local oldDraw = pl:GetInfoNum("d3bot_navmeshing_smartdraw", 1) == 0
 		local maxDrawingDistanceSqr = math.pow(pl:GetInfoNum("d3bot_navmeshing_drawdistance", 0), 2)
@@ -338,8 +271,8 @@ return function(lib)
 		-- Benchmarks:
 		-- Navmesh: zs_infected_square_v1
 		-- CPU: Intel(R) Core(TM) i5-10600K CPU @ 4.10GHz
-		-- 2022-09-23 (bf9e9bd -> 5cd7719): ~1.60  ms per call -> ~0.41  ms per call. (Delta: -74%)
-		-- 2023-02-26 (07e6273 -> 0b48bf1): ~0.487 ms per call -> ~0.412 ms per call. (Delta: -15%)
+		-- 2020-06-23 (bf9e9bd): ~1.60 ms per call.
+		-- 2022-09-23 (5cd7719): ~0.41 ms per call.
 
 		local nearestNodeOrNil
 
@@ -352,22 +285,22 @@ return function(lib)
 
 		for id, node in pairs(self.NodeById) do
 			local nodeX, nodeY, nodeZ = node.Pos:Unpack() -- This is unfortunately a point where anything like math.min could be modified. Therefore we need to put such references into upvalues.
-
+			
 			if node.HasArea then
 				local params = node.Params
 				local areaXMin = params.AreaXMin
 				local areaXMax = params.AreaXMax
 				local areaYMin = params.AreaYMin
 				local areaYMax = params.AreaYMax
-
-				-- Clamp values by using comparison and logical operators, as it's faster than math.min(math.max(...), ...) or even math.Clamp(...).
+				
 				nodeX = (posX > areaXMax and areaXMax) or (posX < areaXMin and areaXMin) or posX
 				nodeY = (posY > areaYMax and areaYMax) or (posY < areaYMin and areaYMin) or posY
 			end
 
-			-- Sieve out nodes that definitely lie outside the search sphere.
-			-- This is the same as checking against bounding boxes of nodes that are extended by the current distMin.
 			local diffX = posX - nodeX
+			
+			-- Sieve out nodes that definitely lie outside the search sphere.
+			-- This is the same as checking against bounding boxes of nodes that are extended by the current distMin.			
 			if diffX < distMin and diffX > distMinNeg then
 				local diffY = posY - nodeY
 				if diffY < distMin and diffY > distMinNeg then
@@ -389,16 +322,16 @@ return function(lib)
 	end
 
 	local isIgnoreParameter = from((" "):Explode("X Y Z AreaXMin AreaYMin AreaXMax AreaYMax")):VsSet().R
-
+	
 	function nodeFallback:MergeWithNode(node)
 		if not node then return end
-
+		
 		local function round(num) return math.Round(num * 10) / 10 end
-
+		
 		-- Store linked nodes. TODO: Store and restore link parameters. Directional links are problematic!
 		local tempLinkedNodes = {}
 		for linkedNode, link in pairs(node.LinkByLinkedNode) do table.insert(tempLinkedNodes, linkedNode) end
-
+		
 		-- Store parameters
 		local tempParameters = {}
 		for paramKey, paramValue in pairs(node.Params) do
@@ -406,11 +339,11 @@ return function(lib)
 				tempParameters[paramKey] = paramValue
 			end
 		end
-
+		
 		-- Calculate Area
 		local selfArea = ((self.Params.AreaXMax or self.Pos.x) - (self.Params.AreaXMin or self.Pos.x)) * ((self.Params.AreaYMax or self.Pos.y) - (self.Params.AreaYMin or self.Pos.y))
 		local nodeArea = ((node.Params.AreaXMax or node.Pos.x) - (node.Params.AreaXMin or node.Pos.x)) * ((node.Params.AreaYMax or node.Pos.y) - (node.Params.AreaYMin or node.Pos.y))
-
+		
 		-- Create new node, that is as large as self and node together. Weighted mean
 		local pos
 		if selfArea + nodeArea > 1 then
@@ -418,64 +351,64 @@ return function(lib)
 		else
 			pos = (self.Pos + node.Pos) / 2
 		end
-
+		
 		self:SetParam("AreaXMax", math.max(self.Params.AreaXMax or self.Pos.x, node.Params.AreaXMax or node.Pos.x))
 		self:SetParam("AreaXMin", math.min(self.Params.AreaXMin or self.Pos.x, node.Params.AreaXMin or node.Pos.x))
-
+		
 		self:SetParam("AreaYMax", math.max(self.Params.AreaYMax or self.Pos.y, node.Params.AreaYMax or node.Pos.y))
 		self:SetParam("AreaYMin", math.min(self.Params.AreaYMin or self.Pos.y, node.Params.AreaYMin or node.Pos.y))
-
+		
 		self:SetParam("X", round(pos.x))
 		self:SetParam("Y", round(pos.y))
 		self:SetParam("Z", round(pos.z))
-
+		
 		-- Restore the links TODO: Restore parameters
 		for _, linkedNode in pairs(tempLinkedNodes) do
 			lib.MapNavMesh:ForceGetLink(self, linkedNode)
 		end
-
+		
 		-- Restore the parameters
 		for paramKey, paramValue in pairs(tempParameters) do
 			self:SetParam(paramKey, paramValue)
 		end
-
+		
 		node:Remove()
-
+		
 		return true
 	end
-
+	
 	function nodeFallback:Split(splitPos, axisName)
 		if not splitPos then return end
 		if axisName ~= "X" and axisName ~= "Y" then return end
-
+		
 		local function round(num) return math.Round(num * 10) / 10 end
-
+		
 		local posKey = axisName:lower()
 		local splitCoord = round(splitPos[posKey])
-
+		
 		-- Check if split position is inside the node area
 		if round(self.Params["Area"..axisName.."Min"] or self.Pos[posKey]) > splitCoord or round(self.Params["Area"..axisName.."Max"] or self.Pos[posKey]) < splitCoord then return end
-
+		
 		-- Store linked nodes
 		local tempLinkedNodes = {}
 		for linkedNode, link in pairs(self.LinkByLinkedNode) do table.insert(tempLinkedNodes, linkedNode) end
-
+		
 		-- Make second half first (and it is essentially a copy)
 		local newNode = lib.MapNavMesh:NewNode()
-
+		
 		-- Replicate all parameters
 		for name, v in pairs(self.Params) do
 			newNode:SetParam(name, v)
 		end
-
+		
 		-- Shrink this node
 		self:SetParam(axisName, round(((self.Params["Area"..axisName.."Min"] or self.Pos[posKey]) + splitCoord) / 2))
 		self:SetParam("Area"..axisName.."Max", splitCoord)
-
+		
 		-- Shrink new node
 		newNode:SetParam(axisName, round(((newNode.Params["Area"..axisName.."Max"] or newNode.Pos[posKey]) + splitCoord) / 2))
 		newNode:SetParam("Area"..axisName.."Min", splitCoord)
-
+		
 		-- Restore the links TODO: Restore link parameters. Directional links are problematic!
 		for _, linkedNode in pairs(tempLinkedNodes) do
 			if round(linkedNode.Params["Area"..axisName.."Min"] or linkedNode.Pos[posKey]) < splitCoord then
@@ -489,22 +422,22 @@ return function(lib)
 				lib.MapNavMesh:ForceGetLink(newNode, linkedNode)
 			end
 		end
-
+		
 		-- Connect new nodes as well
 		lib.MapNavMesh:ForceGetLink(self, newNode)
-
+		
 		return newNode
 	end
-
+	
 	function nodeFallback:Extend(extendPos, axisName)
 		if not extendPos then return end
 		if axisName ~= "X" and axisName ~= "Y" then return end
-
+		
 		local function round(num) return math.Round(num * 10) / 10 end
-
+		
 		local posKey = axisName:lower()
 		local extendCoord = round(extendPos[posKey])
-
+		
 		-- Check on what side to place the new node
 		if not self.HasArea then return end
 		local minCoord, maxCoord
@@ -515,7 +448,7 @@ return function(lib)
 		else
 			return -- Position is not outside of the area
 		end
-
+		
 		-- Make new node that extends the current node until extendPos
 		local newNode = lib.MapNavMesh:NewNode()
 		newNode:SetParam("X", self.Params.X)
@@ -525,18 +458,18 @@ return function(lib)
 		newNode:SetParam("AreaXMin", self.Params.AreaXMin)
 		newNode:SetParam("AreaYMax", self.Params.AreaYMax)
 		newNode:SetParam("AreaYMin", self.Params.AreaYMin)
-
+		
 		-- Resize new node
 		newNode:SetParam(axisName, round((minCoord + maxCoord) / 2))
 		newNode:SetParam("Area"..axisName.."Min", minCoord)
 		newNode:SetParam("Area"..axisName.."Max", maxCoord)
-
+		
 		-- Connect old and new node
 		lib.MapNavMesh:ForceGetLink(self, newNode)
-
+		
 		return newNode
 	end
-
+	
 	local function removeItem(item)
 		item.NavMesh.ItemById[item.Id] = nil
 		item.NavMesh = nil
@@ -553,7 +486,7 @@ return function(lib)
 		self.NavMesh.LinkById[self.Id] = nil
 		removeItem(self)
 	end
-
+	
 	function fallback:Serialize()
 		return from(self.ItemById):Sel(function(id, item)
 			return nil, id .. lib.NavMeshItemIdParamsPairSeparator .. from(item.Params):Sel(function(name, numOrStr)
@@ -573,7 +506,7 @@ return function(lib)
 			return nil, name .. lib.NavMeshItemParamNameNumPairSeparator .. numOrStr
 		end, function(a,b) return tostring(a)<tostring(b) end):Join(lib.NavMeshItemsSeparator).R
 	end
-
+	
 	function lib.DeserializeNavMesh(serialized)
 		serialized = serialized:gsub("\r\n", "\n")
 		serialized = serialized:gsub("\r", "\n")

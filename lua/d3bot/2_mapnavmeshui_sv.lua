@@ -51,7 +51,9 @@ return function(lib)
 					if not cursoredPos then return end
 					local node = lib.MapNavMesh:NewNode()
 					setPos(node, cursoredPos)
-					lib.MapNavMesh:InvalidateCache()
+					if MODULE_ReloadMesh then
+						MODULE_ReloadMesh(lib.MapNavMesh:SerializeSorted())
+					end
 					lib.UpdateMapNavMeshUiSubscribers()
 				end } },
 		{	Name = "Link Nodes",
@@ -66,7 +68,9 @@ return function(lib)
 						if not node then return end
 						lib.MapNavMesh:ForceGetLink(selectedNode, node)
 						clearSelection(pl)
-						lib.MapNavMesh:InvalidateCache()
+						if MODULE_ReloadMesh then
+							MODULE_ReloadMesh(lib.MapNavMesh:SerializeSorted())
+						end
 						lib.UpdateMapNavMeshUiSubscribers()
 					end
 				end } },
@@ -82,7 +86,9 @@ return function(lib)
 						if not node then return end
 						selectedNode:MergeWithNode(node)
 						clearSelection(pl)
-						lib.MapNavMesh:InvalidateCache()
+						if MODULE_ReloadMesh then
+							MODULE_ReloadMesh(lib.MapNavMesh:SerializeSorted())
+						end
 						lib.UpdateMapNavMeshUiSubscribers()
 					end
 				end,
@@ -96,7 +102,9 @@ return function(lib)
 						selectedNode:Extend(cursoredPos, cursoredAxisName)
 					end
 					clearSelection(pl)
-					lib.MapNavMesh:InvalidateCache()
+					if MODULE_ReloadMesh then
+						MODULE_ReloadMesh(lib.MapNavMesh:SerializeSorted())
+					end
 					lib.UpdateMapNavMeshUiSubscribers()
 				end } },
 		{	Name = "Reposition Node",
@@ -110,7 +118,9 @@ return function(lib)
 						local cursoredPos = getCursoredPosOrNil(pl)
 						if not cursoredPos then return end
 						setPos(selectedNode, cursoredPos)
-						lib.MapNavMesh:InvalidateCache()
+						if MODULE_ReloadMesh then
+							MODULE_ReloadMesh(lib.MapNavMesh:SerializeSorted())
+						end
 						lib.UpdateMapNavMeshUiSubscribers()
 					end
 				end,
@@ -121,7 +131,9 @@ return function(lib)
 					if not cursoredPos then return end
 					local cursoredAxisName = getCursoredAxisName(pl)
 					selectedNode:SetParam(cursoredAxisName, round(cursoredPos[cursoredAxisName:lower()]))
-					lib.MapNavMesh:InvalidateCache()
+					if MODULE_ReloadMesh then
+						MODULE_ReloadMesh(lib.MapNavMesh:SerializeSorted())
+					end
 					lib.UpdateMapNavMeshUiSubscribers()
 				end } },
 		{	Name = "Resize Node Area",
@@ -139,7 +151,9 @@ return function(lib)
 					local cursoredPosKey = cursoredAxisName:lower()
 					local cursoredDimension = round(cursoredPos[cursoredPosKey])
 					selectedNode:SetParam("Area" .. cursoredAxisName .. (cursoredDimension < selectedNode.Pos[cursoredPosKey] and "Min" or "Max"), cursoredDimension)
-					lib.MapNavMesh:InvalidateCache()
+					if MODULE_ReloadMesh then
+						MODULE_ReloadMesh(lib.MapNavMesh:SerializeSorted())
+					end
 					lib.UpdateMapNavMeshUiSubscribers()
 				end } },
 		{	Name = "Copy Nodes",
@@ -166,7 +180,9 @@ return function(lib)
 							if linkedNewNodeOrNil then lib.MapNavMesh:ForceGetLink(newNode, linkedNewNodeOrNil) end
 						end
 					end
-					lib.MapNavMesh:InvalidateCache()
+					if MODULE_ReloadMesh then
+						MODULE_ReloadMesh(lib.MapNavMesh:SerializeSorted())
+					end
 					lib.UpdateMapNavMeshUiSubscribers()
 				end } },
 		{	Name = "Set/Unset Last Parameter",
@@ -175,7 +191,9 @@ return function(lib)
 					local item = lib.MapNavMesh:GetCursoredItemOrNil(pl)
 					if not item or not lib.lastParamKey or not lib.lastParamValue then return end
 					item:SetParam(lib.lastParamKey, lib.lastParamValue)
-					lib.MapNavMesh:InvalidateCache()
+					if MODULE_ReloadMesh then
+						MODULE_ReloadMesh(lib.MapNavMesh:SerializeSorted())
+					end
 					lib.UpdateMapNavMeshUiSubscribers()
 				end,
 				[IN_ATTACK2] = function(pl)
@@ -183,7 +201,9 @@ return function(lib)
 					if not item then return end
 					if not item or not lib.lastParamKey then return end
 					item:SetParam(lib.lastParamKey, "")
-					lib.MapNavMesh:InvalidateCache()
+					if MODULE_ReloadMesh then
+						MODULE_ReloadMesh(lib.MapNavMesh:SerializeSorted())
+					end
 					lib.UpdateMapNavMeshUiSubscribers()
 				end } },
 		{	Name = "Delete Item or Area",
@@ -192,76 +212,46 @@ return function(lib)
 					local item = lib.MapNavMesh:GetCursoredItemOrNil(pl)
 					if not item then return end
 					item:Remove()
-					lib.MapNavMesh:InvalidateCache()
+					if MODULE_ReloadMesh then
+						MODULE_ReloadMesh(lib.MapNavMesh:SerializeSorted())
+					end
 					lib.UpdateMapNavMeshUiSubscribers()
 				end,
 				[IN_ATTACK2] = function(pl)
 					local item = lib.MapNavMesh:GetCursoredItemOrNil(pl)
 					if not item then return end
 					for idx, name in ipairs{ "AreaXMin", "AreaXMax", "AreaYMin", "AreaYMax" } do item:SetParam(name, "") end
-					lib.MapNavMesh:InvalidateCache()
+					if MODULE_ReloadMesh then
+						MODULE_ReloadMesh(lib.MapNavMesh:SerializeSorted())
+					end
 					lib.UpdateMapNavMeshUiSubscribers()
 				end } } }
 	
 	local editModeByPl = {}
 	
+	local function printEditMode(pl) pl:ChatPrint("Edit Mode: " .. editModes[editModeByPl[pl]].Name) end
+	
 	local subscribers = {}
 	local subscriptionTypeOrNilByPl = {}
 	
 	function lib.BeMapNavMeshUiSubscriber(pl) if not subscriptionTypeOrNilByPl[pl] then lib.SetMapNavMeshUiSubscription(pl, "view") end end
-	function lib.SetMapNavMeshUiSubscription(pl, subscriptionTypeOrNil, isSpectator)
+	function lib.SetMapNavMeshUiSubscription(pl, subscriptionTypeOrNil)
 		local formerSubscriptionTypeOrNil = subscriptionTypeOrNilByPl[pl]
 		if subscriptionTypeOrNil == formerSubscriptionTypeOrNil then return end
 		subscriptionTypeOrNilByPl[pl] = subscriptionTypeOrNil
 		if formerSubscriptionTypeOrNil == nil then
 			table.insert(subscribers, pl)
 			lib.UploadMapNavMesh(pl)
-
-			pl.m_Weapons = {}
-			for i, weap in ipairs(pl:GetWeapons()) do
-				table.insert(pl.m_Weapons, weap:GetClass())
-			end
-			pl:StripWeapons()
-
-			if isSpectator then
-				pl.m_LastPos = pl:GetPos()
-				pl.m_LastEyeAngles = pl:EyeAngles()
-				pl.m_Spectate = true
-
-				pl:KillSilent()
-				pl:Spectate(OBS_MODE_ROAMING)
-			end
-
 			pl:SendLua(lib.GlobalK .. ".SetIsMapNavMeshViewEnabled(true)")
 		elseif subscriptionTypeOrNil == nil then
 			table.RemoveByValue(subscribers, pl)
-
-			if pl.m_Spectate then
-				pl:UnSpectate()
-				pl:Spawn()
-
-				pl:SetPos(pl.m_LastPos)
-				pl:SetEyeAngles(pl.m_LastEyeAngles)
-
-				pl.m_LastPos = nil
-				pl.m_LastEyeAngles = nil
-				pl.m_Spectate = nil
-			end
-
-			if pl.m_Weapons then
-				for i, weap in pairs(pl.m_Weapons) do
-					pl:Give(weap, true)
-				end
-			end
-
-			pl.m_Weapons = nil
-
 			pl:SendLua(lib.GlobalK .. ".SetIsMapNavMeshViewEnabled(false)")
 		end
 		if formerSubscriptionTypeOrNil == "edit" then clearSelection(pl) end
 		if subscriptionTypeOrNil == "edit" then
 			editModeByPl[pl] = 1
 			pl:SendLua(lib.GlobalK .. ".MapNavMeshEditMode = " .. 1)
+			printEditMode(pl)
 		end
 	end
 
@@ -284,15 +274,14 @@ return function(lib)
 			local navMesh = lib.MapNavMesh
 			local nodeA = navMesh:GetNearestNodeOrNil(entA:GetPos())
 			local nodeB = navMesh:GetNearestNodeOrNil(entB:GetPos())
-			local abilities = {Walk = true, Jump = 250}
-			lib.ShowMapNavMeshPath(pl, nodeA and nodeB and lib.GetBestMeshPathOrNil(nodeA, nodeB, nil, nil, abilities) or {}) -- Can't use any additional costs here, as they differ for each class
+			lib.ShowMapNavMeshPath(pl, nodeA and nodeB and lib.GetBestMeshPathOrNil(nodeA, nodeB, nil, nil, nil) or {}) -- Can't use any additional costs here, as they differ for each class
 		end)
 	end
 	function lib.HideMapNavMeshPath(pl)
 		timer.Remove(getPathDebugTimerId(pl))
 		pl:SendLua(lib.GlobalK .. ".SetShownMapNavMeshPath{}")
 	end
-
+	
 	hook.Add("KeyPress", tostring({}), function(pl, key)
 		if subscriptionTypeOrNilByPl[pl] ~= "edit" then return end
 		if key == IN_RELOAD then
@@ -301,23 +290,11 @@ return function(lib)
 			else
 				editModeByPl[pl] = (editModeByPl[pl] % #editModes) + 1
 				pl:SendLua(lib.GlobalK .. ".MapNavMeshEditMode = " .. editModeByPl[pl])
+				printEditMode(pl)
 			end
 		else
 			local func = editModes[editModeByPl[pl]].FuncByKey[key]
 			if func then func(pl) end
-		end
-	end)
-
-	hook.Add("PlayerButtonDown", tostring({}), function(pl, key)
-		if subscriptionTypeOrNilByPl[pl] ~= "edit" then return end
-		if key >= KEY_0 and key <= KEY_9 and editModeByPl[pl] ~= key - 1 then
-			if editModes[key - 1] then
-				if hasSelection(pl) then
-					clearSelection(pl)
-				end
-				editModeByPl[pl] = key - 1
-				pl:SendLua(lib.GlobalK .. ".MapNavMeshEditMode = " .. key - 1)
-			end
 		end
 	end)
 end
