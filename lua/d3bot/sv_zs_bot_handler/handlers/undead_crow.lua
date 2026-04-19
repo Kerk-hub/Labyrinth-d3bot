@@ -120,6 +120,7 @@ end
 ---Rerolls the bot's target.
 ---@param bot GPlayer
 function HANDLER.RerollTarget(bot)
-	local players = D3bot.RemoveObsDeadTgts(player.GetHumans())
-	bot:D3bot_SetTgtOrNil(table.Random(players), false, nil)
+	local players = D3bot.GetAliveHumanTargets()
+	local target = D3bot.SelectZombieTarget(bot, players, HANDLER.CanBeTgt)
+	bot:D3bot_SetTgtOrNil(target, false, nil)
 end

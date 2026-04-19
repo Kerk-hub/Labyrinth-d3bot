@@ -1,18 +1,145 @@
 local roundStartTime = CurTime()
+local NextNemesisRefresh = CurTime()
 hook.Add("PreRestartRound", D3bot.BotHooksId.."PreRestartRoundSupervisor", function() roundStartTime, D3bot.NodeZombiesCountAddition = CurTime(), nil end)
 
+function D3bot.ToDenseArray(items)
+	local dense = {}
+	for _, item in pairs(items or {}) do
+		if item ~= nil then
+			table.insert(dense, item)
+		end
+	end
+	return dense
+end
+
+function D3bot.GetAliveHumanTargets()
+	local humans = D3bot.ToDenseArray(D3bot.RemoveObsDeadTgts(team.GetPlayers(TEAM_HUMAN)))
+	if TEAM_SURVIVOR then
+		for _, survivor in ipairs(D3bot.ToDenseArray(D3bot.RemoveObsDeadTgts(team.GetPlayers(TEAM_SURVIVOR)))) do
+			if not table.HasValue(humans, survivor) then
+				table.insert(humans, survivor)
+			end
+		end
+	end
+	return humans
+end
+
+function D3bot.RefreshZombieNemesisAssignments(forceRefresh)
+	if not forceRefresh and NextNemesisRefresh > CurTime() then return end
+	NextNemesisRefresh = CurTime() + 0.75 + math.random() * 0.25
+
+	local humans = D3bot.GetAliveHumanTargets()
+	local humanLookup = {}
+	for _, human in ipairs(humans) do
+		humanLookup[human] = true
+	end
+
+	local zombieBots = {}
+	for _, bot in ipairs(D3bot.GetBots()) do
+		if IsValid(bot) and bot:Team() == TEAM_UNDEAD and bot:Alive() then
+			table.insert(zombieBots, bot)
+		end
+	end
+	table.sort(zombieBots, function(a, b)
+		if not IsValid(a) then return false end
+		if not IsValid(b) then return true end
+		return a:EntIndex() < b:EntIndex()
+	end)
+
+	local assignedHumans = {}
+	for _, bot in ipairs(zombieBots) do
+		local mem = bot.D3bot_Mem
+		if mem and (not IsValid(mem.NemesisTarget) or not humanLookup[mem.NemesisTarget]) then
+			mem.NemesisTarget = nil
+		end
+		if mem and IsValid(mem.NemesisTarget) and not assignedHumans[mem.NemesisTarget] then
+			assignedHumans[mem.NemesisTarget] = true
+		elseif mem then
+			mem.NemesisTarget = nil
+		end
+	end
+
+	for _, human in ipairs(humans) do
+		if not assignedHumans[human] then
+			local bestBot, bestDist
+			for _, bot in ipairs(zombieBots) do
+				local mem = bot.D3bot_Mem
+				if mem and not IsValid(mem.NemesisTarget) then
+					local dist = bot:GetPos():DistToSqr(human:GetPos())
+					if not bestDist or dist < bestDist then
+						bestBot, bestDist = bot, dist
+					end
+				end
+			end
+
+			if bestBot and bestBot.D3bot_Mem then
+				bestBot.D3bot_Mem.NemesisTarget = human
+				assignedHumans[human] = true
+			end
+		end
+	end
+end
+
+function D3bot.GetZombieNemesis(bot)
+	local mem = IsValid(bot) and bot.D3bot_Mem
+	local nemesis = mem and mem.NemesisTarget or nil
+	if IsValid(nemesis) and nemesis:Alive() and nemesis:GetObserverMode() == OBS_MODE_NONE and not nemesis:IsFlagSet(FL_NOTARGET) and nemesis:Team() ~= TEAM_UNDEAD then
+		return nemesis
+	end
+end
+
+function D3bot.SelectZombieTarget(bot, potTargets, canBeTgt, options)
+	if not IsValid(bot) then return end
+	options = options or {}
+	D3bot.RefreshZombieNemesisAssignments()
+
+	local mem = bot.D3bot_Mem or {}
+	local botPos = bot:GetPos()
+	local nemesis = D3bot.GetZombieNemesis(bot)
+	local bestTarget
+	local bestWeightedDistance
+	local denseTargets = D3bot.ToDenseArray(potTargets)
+
+	for _, target in ipairs(denseTargets) do
+		if canBeTgt(bot, target) then
+			local targetPos = target:GetPos()
+			local distSqr = botPos:DistToSqr(targetPos)
+			if (not options.MaxDistSqr or distSqr <= options.MaxDistSqr) and (not options.VisibleOnly or bot:D3bot_CanSeeTarget(nil, target)) then
+				local weight = target:IsPlayer() and 1 or (options.EntityWeight or 0.35)
+				if target == nemesis then
+					weight = weight * (D3bot.NemesisTargetWeight or 4)
+				end
+
+				local weightedDistance = math.max(botPos:Distance(targetPos), 1) / math.max(weight, 0.001)
+				if target == mem.TgtOrNil then
+					weightedDistance = weightedDistance * 0.85
+				end
+
+				if not bestWeightedDistance or weightedDistance < bestWeightedDistance then
+					bestTarget, bestWeightedDistance = target, weightedDistance
+				end
+			end
+		end
+	end
+
+	return bestTarget, nemesis
+end
+
 function D3bot.GetDesiredBotCount()
-	local wave = math.max(1, GAMEMODE:GetWave())
-	local minutes = (CurTime() - roundStartTime) / 60
+	local totalHumanCount = #player.GetHumans()
+	local livingHumanCount = #D3bot.GetAliveHumanTargets()
 	local allowedTotal = game.MaxPlayers() - 2
-	local allowedBots = allowedTotal - #player.GetHumans()
+	local allowedBots = math.max(allowedTotal - totalHumanCount, 0)
 	local mapParams = D3bot.MapNavMesh.Params
-	local zombieFormula = ((mapParams.ZPP or D3bot.ZombiesPerPlayer) + (mapParams.ZPPW or D3bot.ZombiesPerPlayerWave) * wave) * #player.GetHumans() + (mapParams.ZPM or D3bot.ZombiesPerMinute) * minutes + (mapParams.ZPW or D3bot.ZombiesPerWave) * wave
+
+	-- Default rule: keep zombie bot count equal to the number of living valid humans.
+	-- Only the admin botmod offset changes that baseline.
 	local zombiesCount = math.Clamp(
-		math.ceil(math.min(zombieFormula, (mapParams.ZPPM or D3bot.ZombiesPerPlayerMax) * #player.GetHumans()) + D3bot.ZombiesCountAddition + (mapParams.BotMod or 0) + (D3bot.NodeZombiesCountAddition or 0)),
+		livingHumanCount + (D3bot.ZombiesCountAddition or 0),
 		0,
 		allowedBots)
-	local survivorFormula = (mapParams.SPP or D3bot.SurvivorsPerPlayer) * #player.GetHumans()
+
+	local survivorFormula = (mapParams.SPP or D3bot.SurvivorsPerPlayer) * totalHumanCount
 	local survivorsCount = math.Clamp(
 		math.ceil(survivorFormula + D3bot.SurvivorCountAddition + (mapParams.SCA or 0)),
 		0,
@@ -37,7 +164,6 @@ hook.Add("PlayerInitialSpawn", D3bot.BotHooksId, function(pl)
 end)
 
 function D3bot.MaintainBotRoles()
-	if #player.GetHumans() == 0 then return end
 	local desiredCountByTeam = {}
 	local allowedTotal
 	desiredCountByTeam[TEAM_UNDEAD], desiredCountByTeam[TEAM_SURVIVOR], allowedTotal = D3bot.GetDesiredBotCount()
@@ -88,7 +214,7 @@ function D3bot.MaintainBotRoles()
 	
 	-- Move (kill) survivors to undead if possible
 	if desiredCountByTeam[TEAM_SURVIVOR] and desiredCountByTeam[TEAM_UNDEAD] then
-		if #(playersByTeam[TEAM_SURVIVOR] or {}) > desiredCountByTeam[TEAM_SURVIVOR] and #(playersByTeam[TEAM_UNDEAD] or {}) < desiredCountByTeam[TEAM_UNDEAD] and botsByTeam[TEAM_SURVIVOR] then
+		if #(botsByTeam[TEAM_SURVIVOR] or {}) > desiredCountByTeam[TEAM_SURVIVOR] and #(botsByTeam[TEAM_UNDEAD] or {}) < desiredCountByTeam[TEAM_UNDEAD] and botsByTeam[TEAM_SURVIVOR] then
 			local randomBot = table.remove(botsByTeam[TEAM_SURVIVOR], 1)
 			randomBot:StripWeapons()
 			--randomBot:KillSilent()
@@ -99,7 +225,7 @@ function D3bot.MaintainBotRoles()
 	-- Add bots out of managed teams to maintain desired counts
 	if player.GetCount() < allowedTotal then
 		for team, desiredCount in pairs(desiredCountByTeam) do
-			if #(playersByTeam[team] or {}) < desiredCount then
+			if #(botsByTeam[team] or {}) < desiredCount then
 				if D3bot.UseConsoleBots then
 					spawnAsTeam = team
 					RunConsoleCommand("bot")
@@ -119,7 +245,7 @@ function D3bot.MaintainBotRoles()
 	end
 	-- Remove bots out of managed teams to maintain desired counts
 	for team, desiredCount in pairs(desiredCountByTeam) do
-		if #(playersByTeam[team] or {}) > desiredCount and botsByTeam[team] then
+		if #(botsByTeam[team] or {}) > desiredCount and botsByTeam[team] then
 			local randomBot = table.remove(botsByTeam[team], 1)
 			randomBot:StripWeapons()
 			return randomBot and randomBot:Kick(D3bot.BotKickReason)
@@ -139,10 +265,41 @@ end
 
 local NextNodeDamage = CurTime()
 local NextMaintainBotRoles = CurTime()
+
+function D3bot.QueueBotRoleRefresh()
+	NextMaintainBotRoles = 0
+	NextNemesisRefresh = 0
+end
+
+hook.Add("PlayerInitialSpawn", D3bot.BotHooksId.."PlayerInitialSpawnSupervisorRefresh", function(pl)
+	if D3bot.IsEnabledCached and not pl.D3bot_Mem then
+		D3bot.QueueBotRoleRefresh()
+	end
+end)
+
+hook.Add("PlayerSpawn", D3bot.BotHooksId.."PlayerSpawnSupervisorRefresh", function(pl)
+	if D3bot.IsEnabledCached and not pl.D3bot_Mem then
+		D3bot.QueueBotRoleRefresh()
+	end
+end)
+
+hook.Add("PlayerDeath", D3bot.BotHooksId.."PlayerDeathSupervisorRefresh", function(pl)
+	if D3bot.IsEnabledCached and not pl.D3bot_Mem then
+		D3bot.QueueBotRoleRefresh()
+	end
+end)
+
+hook.Add("PlayerDisconnected", D3bot.BotHooksId.."PlayerDisconnectedSupervisorRefresh", function()
+	if D3bot.IsEnabledCached then
+		D3bot.QueueBotRoleRefresh()
+	end
+end)
+
 function D3bot.SupervisorThinkFunction()
 	if NextMaintainBotRoles < CurTime() then
 		NextMaintainBotRoles = CurTime() + (D3bot.BotUpdateDelay or 1)
 		D3bot.MaintainBotRoles()
+		D3bot.RefreshZombieNemesisAssignments()
 	end
 	if (NextNodeDamage or 0) < CurTime() then
 		NextNodeDamage = CurTime() + (D3bot.NodeDamageInterval or 2)

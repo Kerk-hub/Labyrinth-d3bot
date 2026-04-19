@@ -82,15 +82,10 @@ function HANDLER.ThinkFunction(bot)
 	if mem.nextUpdateSurroundingPlayers and mem.nextUpdateSurroundingPlayers < CurTime() or not mem.nextUpdateSurroundingPlayers then
 		if not mem.TgtOrNil or IsValid(mem.TgtOrNil) and mem.TgtOrNil:GetPos():Distance(botPos) > HANDLER.BotTgtFixationDistMin then
 			mem.nextUpdateSurroundingPlayers = CurTime() + 0.9 + math.random() * 0.2
-			local targets = player.GetAll() -- TODO: Filter targets before sorting
-			table.sort(targets, function(a, b) return botPos:DistToSqr(a:GetPos()) < botPos:DistToSqr(b:GetPos()) end)
-			for k, v in ipairs(targets) do
-				if IsValid(v) and botPos:DistToSqr(v:GetPos()) < 500*500 and HANDLER.CanBeTgt(bot, v) and bot:D3bot_CanSeeTarget(nil, v) then
-					bot:D3bot_SetTgtOrNil(v, false, nil)
-					mem.nextUpdateSurroundingPlayers = CurTime() + 5
-					break
-				end
-				if k > 3 then break end
+			local nearbyTarget = D3bot.SelectZombieTarget(bot, player.GetAll(), HANDLER.CanBeTgt, { VisibleOnly = true, MaxDistSqr = 500*500 })
+			if IsValid(nearbyTarget) then
+				bot:D3bot_SetTgtOrNil(nearbyTarget, false, nil)
+				mem.nextUpdateSurroundingPlayers = CurTime() + 5
 			end
 		end
 	end
@@ -167,7 +162,7 @@ end
 ---@param bot GPlayer
 function HANDLER.RerollTarget(bot)
 	-- Get humans or non zombie players or any players in this order.
-	local players = D3bot.RemoveObsDeadTgts(team.GetPlayers(TEAM_HUMAN))
+	local players = D3bot.GetAliveHumanTargets()
 	if #players == 0 and TEAM_UNDEAD then
 		players = D3bot.RemoveObsDeadTgts(player.GetAll())
 		players = D3bot.From(players):Where(function(k, v) return v:Team() ~= TEAM_UNDEAD end).R
@@ -177,5 +172,6 @@ function HANDLER.RerollTarget(bot)
 	end
 	potEntTargets = D3bot.GetEntsOfClss(potTargetEntClasses)
 	local potTargets = table.Add(players, potEntTargets)
-	bot:D3bot_SetTgtOrNil(table.Random(potTargets), false, nil)
+	local target = D3bot.SelectZombieTarget(bot, potTargets, HANDLER.CanBeTgt, { EntityWeight = 0.2 })
+	bot:D3bot_SetTgtOrNil(target, false, nil)
 end

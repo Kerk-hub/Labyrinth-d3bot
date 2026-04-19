@@ -221,6 +221,7 @@ end
 function meta:D3bot_InitializeOrReset()
 	---@class D3bot_Mem
 	---@field public TgtOrNil GEntity? -- The target entity if not nil.
+	---@field public NemesisTarget GPlayer? -- Primary human target this zombie bot is weighted toward attacking.
 	---@field public PosTgtOrNil GVector? -- The target position if not nil.
 	---@field public NodeTgtOrNil D3NavmeshNode|GCNavArea? -- The target node if not nil. Don't confuse this with TgtNodeOrNil.
 	---@field public TgtNodeOrNil D3NavmeshNode|GCNavArea? -- The node where the current target is located on. Don't confuse this with NodeTgtOrNil.
@@ -270,6 +271,7 @@ function meta:D3bot_InitializeOrReset()
 	local considerPathLethality = math.random(1, D3bot.BotConsideringDeathCostAntichance) == 1
 
 	mem.TgtOrNil = nil										-- Target entity to walk to and attack.
+	mem.NemesisTarget = nil									-- Primary human to focus on when selecting targets.
 	mem.PosTgtOrNil = nil									-- Target position to walk to.
 	mem.NodeTgtOrNil = nil									-- Target node.
 	mem.TgtNodeOrNil = nil									-- Node of the target entity or position.

@@ -29,6 +29,7 @@ D3bot.BotAimPosVelocityOffshoot = 0.4			-- Offshoot for position prediction of m
 D3bot.BotJumpAntichance = 25
 D3bot.BotDuckAntichance = 25
 D3bot.FaceTargetOffshootFactor = 0.2			-- Factor that reduces the offshoot when the target is within attack range. Increase value to prevent bots from "locking" onto target.
+D3bot.NemesisTargetWeight = 10			-- Multiplier applied to a zombie bot's assigned nemesis during target selection. Higher values make the bot commit harder.
 
 D3bot.ZombiesPerPlayer = 0.3			-- Number of bot zombies per player.
 D3bot.ZombiesPerPlayerMax = 2.0			-- Limits amount of zombies to this zombie/player ratio. (Not including ZombiesCountAddition)
