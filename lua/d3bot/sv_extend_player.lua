@@ -168,23 +168,42 @@ function meta:D3bot_FindBarricadeEntity(samples)
 	return nil, nil
 end
 
+local function IsStealthZombieClass(zombieClass)
+	if not zombieClass then return false end
+	if zombieClass.Stealth or zombieClass.Invisible or zombieClass.NoTarget then return true end
+
+	local name = string.lower(zombieClass.Name or "")
+	return string.find(name, "wraith", 1, true)
+		or string.find(name, "shade", 1, true)
+		or string.find(name, "stalker", 1, true)
+		or string.find(name, "stealth", 1, true)
+		or string.find(name, "invis", 1, true)
+end
+
 function meta:D3bot_RerollClass(classes)
 	if not GAMEMODE:GetWaveActive() then return end
 	--if self:GetZombieClassTable().Name == "Zombie Torso" then return end -- ???
 	if GAMEMODE.ZombieEscape or GAMEMODE.PantsMode or GAMEMODE:IsClassicMode() or GAMEMODE:IsBabyMode() then return end
+
+	local currentWave = GAMEMODE:GetWave()
 	local zombieClasses = {}
+
 	for _, class in ipairs(classes) do
 		local zombieClass = GAMEMODE.ZombieClasses[class]
-		if zombieClass then
-			if not zombieClass.Locked and (zombieClass.Unlocked or zombieClass.Wave <= GAMEMODE:GetWave()) then
+		if zombieClass and not zombieClass.Locked and (zombieClass.Unlocked or zombieClass.Wave <= currentWave) then
+			if currentWave >= 2 or not IsStealthZombieClass(zombieClass) then
 				table.insert(zombieClasses, zombieClass)
 			end
 		end
 	end
+
 	local zombieClass = table.Random(zombieClasses)
 	if not zombieClass then zombieClass = GAMEMODE.ZombieClasses[GAMEMODE.DefaultZombieClass] end
+	if zombieClass and currentWave < 2 and IsStealthZombieClass(zombieClass) then return end
 	--self:SetZombieClass(zombieClass.Index)
-	self.DeathClass = zombieClass.Index
+	if zombieClass then
+		self.DeathClass = zombieClass.Index
+	end
 end
 
 function meta:D3bot_ResetTgt() -- Reset all kind of targets
