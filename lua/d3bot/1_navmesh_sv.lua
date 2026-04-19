@@ -1,6 +1,7 @@
 
 return function(lib)
-	lib.MapNavMeshDir = "addons/zs_bots/data/d3bot/navmesh/map/" --"d3bot/navmesh/map/"
+	lib.MapNavMeshDir = "d3bot/navmesh/map/"
+	
 	function lib.GetMapNavMeshPath(mapName)
 		return lib.MapNavMeshDir .. mapName .. ".txt"
 	end
@@ -11,7 +12,7 @@ return function(lib)
 	lib.MapNavMeshParamsPath = lib.GetMapNavMeshParamsPath(game.GetMap())
 	
 	function lib.CheckMapNavMesh(mapName)
-		return file.Exists(lib.GetMapNavMeshPath(mapName), "GAME")
+		return file.Exists(lib.GetMapNavMeshPath(mapName), "DATA")
 	end
 	
 	util.AddNetworkString(lib.MapNavMeshNetworkStr)
@@ -50,13 +51,13 @@ return function(lib)
 	function lib.LoadMapNavMesh()
 		local mapNavMesh
 		lib.TryCatch(function()
-			mapNavMesh = lib.DeserializeNavMesh(file.Read(lib.MapNavMeshPath, "GAME") or "")
+			mapNavMesh = lib.DeserializeNavMesh(file.Read(lib.MapNavMeshPath, "DATA") or "")
 		end, function(errorMsg)
 			mapNavMesh = lib.NewNavMesh()
 			lib.LogError("Couldn't load " .. lib.MapNavMeshDir .. " (using empty nav mesh instead):\n" .. errorMsg)
 		end)
 		lib.TryCatch(function()
-			mapNavMesh:DeserializeNavMeshParams(file.Read(lib.MapNavMeshParamsPath, "GAME") or "")
+			mapNavMesh:DeserializeNavMeshParams(file.Read(lib.MapNavMeshParamsPath, "DATA") or "")
 		end, function(errorMsg)
 			lib.LogError("Couldn't load params for " .. lib.MapNavMeshDir .. ":\n" .. errorMsg)
 		end)

@@ -8,12 +8,13 @@ HANDLER.PounceIntervalPlusRandom = 5 -- Additional random delay.
 
 HANDLER.Fallback = false
 function HANDLER.SelectorFunction(zombieClassName, team)
-	return team == TEAM_UNDEAD and zombieClassName == "Headcrab" or zombieClassName == "Armored Headcrab"
+	return team == TEAM_UNDEAD and zombieClassName == "Headcrab"
 end
 
+---Updates the bot move data every frame.
+---@param bot GPlayer|table
+---@param cmd GCUserCmd
 function HANDLER.UpdateBotCmdFunction(bot, cmd)
-	if GAMEMODE.RoundEnded then return end
-	
 	cmd:ClearButtons()
 	cmd:ClearMovement()
 
@@ -26,9 +27,12 @@ function HANDLER.UpdateBotCmdFunction(bot, cmd)
 	bot:D3bot_UpdatePathProgress()
 	D3bot.Basics.SuicideOrRetarget(bot)
 
-	local result, actions, forwardSpeed, sideSpeed, upSpeed, aimAngle, minorStuck, majorStuck, facesHindrance = D3bot.Basics.WalkAttackAuto(bot)
+	local result, actions, forwardSpeed, sideSpeed, upSpeed, aimAngle, minorStuck, majorStuck, facesHindrance = D3bot.Basics.PounceAuto(bot, true)
 	if not result then
-		return
+		result, actions, forwardSpeed, sideSpeed, upSpeed, aimAngle, minorStuck, majorStuck, facesHindrance = D3bot.Basics.WalkAttackAuto(bot)
+		if not result then
+			return
+		end
 	end
 
 	-- Trigger a pounce every now and then.
@@ -61,14 +65,15 @@ function HANDLER.UpdateBotCmdFunction(bot, cmd)
 
 	if majorStuck and GAMEMODE:GetWaveActive() then bot:Kill() end
 
-	bot:SetEyeAngles(aimAngle)
-	cmd:SetViewAngles(aimAngle)
-	cmd:SetForwardMove(forwardSpeed)
+	if aimAngle then bot:SetEyeAngles(aimAngle)	cmd:SetViewAngles(aimAngle) end
+	if forwardSpeed then cmd:SetForwardMove(forwardSpeed) end
 	if sideSpeed then cmd:SetSideMove(sideSpeed) end
 	if upSpeed then cmd:SetUpMove(upSpeed) end
 	cmd:SetButtons(buttons)
 end
 
+---Called every frame.
+---@param bot GPlayer
 function HANDLER.ThinkFunction(bot)
 	local mem = bot.D3bot_Mem
 
@@ -109,10 +114,13 @@ function HANDLER.ThinkFunction(bot)
 	end
 	if mem.nextUpdatePath and mem.nextUpdatePath < CurTime() or not mem.nextUpdatePath then
 		mem.nextUpdatePath = CurTime() + 0.9 + math.random() * 0.2
-		bot:D3bot_UpdatePath(nil, nil)
+		bot:D3bot_UpdatePath(pathCostFunction, nil)
 	end
 end
 
+---Called when the bot takes damage.
+---@param bot GPlayer
+---@param dmg GCTakeDamageInfo
 function HANDLER.OnTakeDamageFunction(bot, dmg)
 	local attacker = dmg:GetAttacker()
 	if not HANDLER.CanBeTgt(bot, attacker) then return end
@@ -122,18 +130,20 @@ function HANDLER.OnTakeDamageFunction(bot, dmg)
 	--bot:Say("Ouch! Fuck you "..attacker:GetName().."! I'm gonna kill you!")
 end
 
-function HANDLER.OnDoDamageFunction(bot, dmg)
+---Called when the bot damages something.
+---@param bot GPlayer -- The bot that caused the damage.
+---@param ent GEntity -- The entity that took damage.
+---@param dmg GCTakeDamageInfo -- Information about the damage.
+function HANDLER.OnDoDamageFunction(bot, ent, dmg)
 	local mem = bot.D3bot_Mem
 	--bot:Say("Gotcha!")
 end
 
+---Called when the bot dies.
+---@param bot GPlayer
 function HANDLER.OnDeathFunction(bot)
 	--bot:Say("rip me!")
 	bot:D3bot_RerollClass(D3bot.Handlers.Undead_Fallback.BotClasses) -- Reuse list of available classes.
-	
-end
-
-function HANDLER.OnRespawnFunction(bot)
 	HANDLER.RerollTarget(bot)
 end
 
@@ -141,23 +151,31 @@ end
 -- Custom functions and settings --
 -----------------------------------
 
-local potTargetEntClasses = {}
+local potTargetEntClasses = {"prop_*turret", "prop_arsenalcrate", "prop_manhack*"}
 local potEntTargets = nil
+
+---Returns whether a target is valid.
+---@param bot GPlayer
+---@param target GPlayer|GEntity|any
 function HANDLER.CanBeTgt(bot, target)
 	if not target or not IsValid(target) then return end
 	if IsValid(target) and target:IsPlayer() and target ~= bot and target:Team() ~= TEAM_UNDEAD and target:GetObserverMode() == OBS_MODE_NONE and not target:IsFlagSet(FL_NOTARGET) and target:Alive() then return true end
 	if potEntTargets and table.HasValue(potEntTargets, target) then return true end
 end
 
+---Rerolls the bot's target.
+---@param bot GPlayer
 function HANDLER.RerollTarget(bot)
-	-- Get humans or non zombie players or any players in this order
-	--local players = D3bot.RemoveObsDeadTgts(GAMEMODE.HumanPlayers)
-	--if #players == 0 and TEAM_UNDEAD then
-		--players = D3bot.RemoveObsDeadTgts(player.GetAll())
-		--players = D3bot.From(players):Where(function(k, v) return v:Team() ~= TEAM_UNDEAD end).R
-	--end
-	--[[if #players == 0 then
+	-- Get humans or non zombie players or any players in this order.
+	local players = D3bot.RemoveObsDeadTgts(team.GetPlayers(TEAM_HUMAN))
+	if #players == 0 and TEAM_UNDEAD then
 		players = D3bot.RemoveObsDeadTgts(player.GetAll())
-	end]]
-	bot:D3bot_SetTgtOrNil(table.Random(D3bot.RemoveObsDeadTgts(GAMEMODE.HumanPlayers)), false, nil)
+		players = D3bot.From(players):Where(function(k, v) return v:Team() ~= TEAM_UNDEAD end).R
+	end
+	if #players == 0 then
+		players = D3bot.RemoveObsDeadTgts(player.GetAll())
+	end
+	potEntTargets = D3bot.GetEntsOfClss(potTargetEntClasses)
+	local potTargets = table.Add(players, potEntTargets)
+	bot:D3bot_SetTgtOrNil(table.Random(potTargets), false, nil)
 end
