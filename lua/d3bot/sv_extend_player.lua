@@ -241,6 +241,7 @@ function meta:D3bot_InitializeOrReset()
 	---@class D3bot_Mem
 	---@field public TgtOrNil GEntity? -- The target entity if not nil.
 	---@field public NemesisTarget GPlayer? -- Primary human target this zombie bot is weighted toward attacking.
+	---@field public IsZombieMain boolean? -- True for the special Z-main fallback bot that uses legacy targeting.
 	---@field public PosTgtOrNil GVector? -- The target position if not nil.
 	---@field public NodeTgtOrNil D3NavmeshNode|GCNavArea? -- The target node if not nil. Don't confuse this with TgtNodeOrNil.
 	---@field public TgtNodeOrNil D3NavmeshNode|GCNavArea? -- The node where the current target is located on. Don't confuse this with NodeTgtOrNil.
@@ -286,11 +287,13 @@ function meta:D3bot_InitializeOrReset()
 	---@field public IsOnLadder boolean -- When true, we are on a path that is defined as "ladder" according to the navmesh. This is used to make the bot issue special commands to leave the ladder when necessary.
 	self.D3bot_Mem = self.D3bot_Mem or {}
 	local mem = self.D3bot_Mem
+	local wasZombieMain = mem.IsZombieMain == true
 
 	local considerPathLethality = math.random(1, D3bot.BotConsideringDeathCostAntichance) == 1
 
 	mem.TgtOrNil = nil										-- Target entity to walk to and attack.
 	mem.NemesisTarget = nil									-- Primary human to focus on when selecting targets.
+	mem.IsZombieMain = wasZombieMain								-- True when this bot is the special Z-main fallback zombie.
 	mem.PosTgtOrNil = nil									-- Target position to walk to.
 	mem.NodeTgtOrNil = nil									-- Target node.
 	mem.TgtNodeOrNil = nil									-- Node of the target entity or position.
