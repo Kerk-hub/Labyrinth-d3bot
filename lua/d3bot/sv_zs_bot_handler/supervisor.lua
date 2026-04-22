@@ -26,7 +26,14 @@ function D3bot.GetAliveHumanTargets()
 end
 
 function D3bot.IsZombieMainBot(bot)
-	return IsValid(bot) and bot.D3bot_Mem and bot.D3bot_Mem.IsZombieMain == true
+	return IsValid(bot) and bot:IsBot() and bot.D3bot_Mem and bot.D3bot_Mem.IsZombieMain == true
+end
+
+local function kickBotIfBot(bot)
+	if IsValid(bot) and bot:IsBot() then
+		bot:StripWeapons()
+		return bot:Kick(D3bot.BotKickReason)
+	end
 end
 
 function D3bot.GetZombieMainBot()
@@ -350,8 +357,7 @@ function D3bot.MaintainBotRoles()
 	end
 
 	if IsValid(zombieMainBot) and (hasZombiePlayers or #player.GetHumans() == 0) then
-		zombieMainBot:StripWeapons()
-		return zombieMainBot:Kick(D3bot.BotKickReason)
+		return kickBotIfBot(zombieMainBot)
 	end
 	
 	-- Move (kill) survivors to undead if possible
@@ -383,8 +389,7 @@ function D3bot.MaintainBotRoles()
 	for team, desiredCount in pairs(desiredCountByTeam) do
 		if #(botsByTeam[team] or {}) > desiredCount and botsByTeam[team] then
 			local randomBot = table.remove(botsByTeam[team], 1)
-			randomBot:StripWeapons()
-			return randomBot and randomBot:Kick(D3bot.BotKickReason)
+			return kickBotIfBot(randomBot)
 		end
 	end
 	-- Remove bots out of non managed teams if the server is getting too full
@@ -392,8 +397,7 @@ function D3bot.MaintainBotRoles()
 		for team, desiredCount in pairs(desiredCountByTeam) do
 			if not desiredCountByTeam[team] and botsByTeam[team] then
 				local randomBot = table.remove(botsByTeam[team], 1)
-				randomBot:StripWeapons()
-				return randomBot and randomBot:Kick(D3bot.BotKickReason)
+				return kickBotIfBot(randomBot)
 			end
 		end
 	end
