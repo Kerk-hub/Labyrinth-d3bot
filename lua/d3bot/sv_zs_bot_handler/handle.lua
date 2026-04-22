@@ -47,7 +47,9 @@ hook.Add("Think", D3bot.BotHooksId.."🤔", function()
 				gamemode.Call("PlayerDeathThink", bot)
 				if (not bot.StartSpectating or bot.StartSpectating <= CurTime()) and not (GAMEMODE.RoundEnded or bot.Revive or bot.NextSpawnTime) and bot:GetObserverMode() ~= OBS_MODE_NONE then
 					if GAMEMODE:GetWaveActive() then
-						bot:RefreshDynamicSpawnPoint()
+						if not D3bot.TrySetNemesisSpawn(bot) then
+							bot:RefreshDynamicSpawnPoint()
+						end
 						bot:UnSpectateAndSpawn()
 					else
 						bot:ChangeToCrow()
