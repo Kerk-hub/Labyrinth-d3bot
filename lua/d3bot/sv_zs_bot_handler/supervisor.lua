@@ -108,6 +108,12 @@ function D3bot.RefreshZombieNemesisAssignments(forceRefresh)
 		humanLookup[human] = true
 	end
 
+	for _, bot in ipairs(D3bot.GetBots()) do
+		if D3bot.IsZombieMainBot(bot) and bot.D3bot_Mem then
+			bot.D3bot_Mem.NemesisTarget = nil
+		end
+	end
+
 	local zombieBots = {}
 	for _, bot in ipairs(D3bot.GetBots()) do
 		if IsValid(bot) and bot:Team() == TEAM_UNDEAD and bot:Alive() and not D3bot.IsZombieMainBot(bot) then
@@ -146,7 +152,7 @@ function D3bot.RefreshZombieNemesisAssignments(forceRefresh)
 				end
 			end
 
-			if bestBot and bestBot.D3bot_Mem then
+			if bestBot and bestBot.D3bot_Mem and not D3bot.IsZombieMainBot(bestBot) then
 				bestBot.D3bot_Mem.NemesisTarget = human
 				assignedHumans[human] = true
 			end
