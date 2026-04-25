@@ -460,6 +460,26 @@ function D3bot.SupervisorThinkFunction()
 		D3bot.MaintainBotRoles()
 		D3bot.RefreshZombieNemesisAssignments()
 	end
+
+	-- Self-healing forced-sync: guarantee nemesis bot count always matches living humans
+	do
+		local humans = D3bot.GetAliveHumanTargets()
+		local zombieBots = {}
+		for _, bot in ipairs(D3bot.GetBots()) do
+			if IsValid(bot) and bot:Team() == TEAM_UNDEAD and bot:Alive() and not D3bot.IsZombieMainBot(bot) then
+				table.insert(zombieBots, bot)
+			end
+		end
+		local nemesisCount = #zombieBots
+		local humanCount = #humans
+		if nemesisCount ~= humanCount then
+			-- Force a full bot role and nemesis refresh
+			D3bot.QueueBotRoleRefresh()
+			D3bot.MaintainBotRoles()
+			D3bot.RefreshZombieNemesisAssignments(true)
+		end
+	end
+
 	if (NextNodeDamage or 0) < CurTime() then
 		NextNodeDamage = CurTime() + (D3bot.NodeDamageInterval or 2)
 		D3bot.DoNodeTrigger()
