@@ -209,57 +209,6 @@ function D3bot.SelectZombieTarget(bot, potTargets, canBeTgt, options)
 	return bestTarget, nemesis
 end
 
-function D3bot.TrySetNemesisSpawn(bot)
-	local success, result = pcall(function()
-		if not IsValid(bot) or D3bot.IsZombieMainBot(bot) then return false end
-
-		local nemesis = D3bot.GetZombieNemesis(bot)
-		if not IsValid(nemesis) then return false end
-
-		local nemesisPos = nemesis:GetPos()
-		local candidateSpawns = {}
-
-		for _, spawnEnt in ipairs(team.GetValidSpawnPoint(TEAM_UNDEAD) or {}) do
-			if IsValid(spawnEnt) and spawnEnt:GetClass() == "zombiegasses" then
-				table.insert(candidateSpawns, spawnEnt)
-			end
-		end
-
-		if GAMEMODE.GetDynamicSpawns then
-			for _, spawnEnt in ipairs(GAMEMODE:GetDynamicSpawns(bot) or {}) do
-				if IsValid(spawnEnt) and spawnEnt:GetClass() == "prop_creepernest" then
-					table.insert(candidateSpawns, spawnEnt)
-				end
-			end
-		end
-
-		local bestSpawn, bestDist
-		for _, spawnEnt in ipairs(candidateSpawns) do
-			local dist = spawnEnt:GetPos():DistToSqr(nemesisPos)
-			if not bestDist or dist < bestDist then
-				bestSpawn, bestDist = spawnEnt, dist
-			end
-		end
-
-		if not IsValid(bestSpawn) then return false end
-
-		bot.ForceDynamicSpawn = bestSpawn
-		bot.ForceSpawnAngles = bestSpawn.GetAngles and bestSpawn:GetAngles() or bot:EyeAngles()
-		return true
-	end)
-
-	if success and result then
-		return true
-	end
-
-	if IsValid(bot) then
-		bot.ForceDynamicSpawn = nil
-		bot.ForceSpawnAngles = nil
-	end
-
-	return false
-end
-
 function D3bot.GetDesiredBotCount()
 	local totalHumanCount = #player.GetHumans()
 	local livingHumanCount = #D3bot.GetAliveHumanTargets()
