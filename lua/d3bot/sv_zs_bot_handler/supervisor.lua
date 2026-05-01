@@ -348,7 +348,15 @@ function D3bot.MaintainBotRoles()
 		end
 	end
 
-	if not hasZombieVolunteerPlayer and not IsValid(zombieMainBot) and #player.GetHumans() > 0 and effectivePlayerCount < game.MaxPlayers() then
+	-- Prevent adding Z-main bot if a player on zombie team has the Z-main tag
+	local zmain_player_exists = false
+	for _, pl in ipairs(player.GetAll()) do
+		if not pl:IsBot() and pl:Team() == TEAM_UNDEAD and pl:GetNWBool("zs_zmain", false) then
+			zmain_player_exists = true
+			break
+		end
+	end
+	if not hasZombieVolunteerPlayer and not IsValid(zombieMainBot) and #player.GetHumans() > 0 and effectivePlayerCount < game.MaxPlayers() and not zmain_player_exists then
 		spawnManagedBot(TEAM_UNDEAD, D3bot.ZombieMainBotName, true)
 		return
 	end
