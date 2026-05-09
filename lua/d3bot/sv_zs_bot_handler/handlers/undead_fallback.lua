@@ -78,6 +78,20 @@ function HANDLER.UpdateBotCmdFunction(bot, cmd)
 
 	if majorStuck and GAMEMODE:GetWaveActive() then bot:Kill() end
 
+	if majorStuck and GAMEMODE:GetWaveActive() then
+		local pos = bot:GetPos()
+		local msg = string.format("[D3bot] Bot %s major stuck at (%.1f, %.1f, %.1f)", bot:Nick(), pos.x, pos.y, pos.z)
+		local setpos = string.format("setpos %.1f %.1f %.1f", pos.x, pos.y, pos.z)
+		print(msg)
+		print("[D3bot] Teleport: " .. setpos)
+		if SERVER then
+			for _, ply in ipairs(player.GetAll()) do
+				ply:PrintMessage(HUD_PRINTTALK, msg)
+			end
+		end
+		bot:Kill()
+	end
+
 	if aimAngle then bot:SetEyeAngles(aimAngle)	cmd:SetViewAngles(aimAngle) end
 	if forwardSpeed then cmd:SetForwardMove(forwardSpeed) end
 	if sideSpeed then cmd:SetSideMove(sideSpeed) end
