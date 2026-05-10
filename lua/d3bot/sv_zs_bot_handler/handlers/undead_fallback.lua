@@ -4,10 +4,9 @@ local HANDLER = D3bot.Handlers.Undead_Fallback
 HANDLER.AngOffshoot = 45
 HANDLER.BotTgtFixationDistMin = 250
 HANDLER.BotClasses = {
-	"Zombie", "Zombie", "Zombie",
-	"Bloated Zombie", "Bloated Zombie", "Bloated Zombie",
-	"Poison Zombie", "Poison Zombie", "Poison Zombie",
-	"Zombine", "Zombine", "Zombine", "Zombine", "Zombine"
+	"Zombie",
+	"Bloated Zombie",
+	"Fast Zombie"
 }
 HANDLER.RandomSecondaryAttack = {
 	Ghoul = {MinTime = 5, MaxTime = 7}
