@@ -6,7 +6,7 @@ HANDLER.BotTgtFixationDistMin = 250
 HANDLER.BotClasses = {
 	"Zombie",
 	"Bloated Zombie",
-	"Fast Zombie"
+	--"Fast Zombie"
 }
 HANDLER.RandomSecondaryAttack = {
 	Ghoul = {MinTime = 5, MaxTime = 7}
