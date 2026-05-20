@@ -105,16 +105,32 @@ function HANDLER.ThinkFunction(bot)
 
 	local botPos = bot:GetPos()
 
-	if mem.nextUpdateSurroundingPlayers and mem.nextUpdateSurroundingPlayers < CurTime() or not mem.nextUpdateSurroundingPlayers then
-		if not mem.TgtOrNil or IsValid(mem.TgtOrNil) and mem.TgtOrNil:GetPos():Distance(botPos) > HANDLER.BotTgtFixationDistMin then
-			mem.nextUpdateSurroundingPlayers = CurTime() + 0.9 + math.random() * 0.2
-			local nearbyTarget = D3bot.SelectZombieTarget(bot, player.GetAll(), HANDLER.CanBeTgt, { VisibleOnly = true, MaxDistSqr = 500*500 })
-			if IsValid(nearbyTarget) then
-				bot:D3bot_SetTgtOrNil(nearbyTarget, false, nil)
-				mem.nextUpdateSurroundingPlayers = CurTime() + 5
-			end
-		end
-	end
+
+	       if mem.nextUpdateSurroundingPlayers and mem.nextUpdateSurroundingPlayers < CurTime() or not mem.nextUpdateSurroundingPlayers then
+		       if not mem.TgtOrNil or IsValid(mem.TgtOrNil) and mem.TgtOrNil:GetPos():Distance(botPos) > HANDLER.BotTgtFixationDistMin then
+			       mem.nextUpdateSurroundingPlayers = CurTime() + 0.9 + math.random() * 0.2
+			       local nearbyTarget = D3bot.SelectZombieTarget(bot, player.GetAll(), HANDLER.CanBeTgt, { VisibleOnly = true, MaxDistSqr = 500*500 })
+			       if IsValid(nearbyTarget) then
+				       bot:D3bot_SetTgtOrNil(nearbyTarget, false, nil)
+				       mem.nextUpdateSurroundingPlayers = CurTime() + 5
+			       end
+		       end
+	       end
+
+	       -- New: Periodically check if current target is visible; if not, retarget after 1.5s
+	       if mem.TgtOrNil and IsValid(mem.TgtOrNil) and mem.TgtOrNil:IsPlayer() then
+		       if not bot:D3bot_CanSeeTarget(nil, mem.TgtOrNil) then
+			       mem.lostTargetSince = mem.lostTargetSince or CurTime()
+			       if CurTime() - mem.lostTargetSince > 1.5 then
+				       HANDLER.RerollTarget(bot)
+				       mem.lostTargetSince = nil
+			       end
+		       else
+			       mem.lostTargetSince = nil
+		       end
+	       else
+		       mem.lostTargetSince = nil
+	       end
 
 	if mem.nextCheckTarget and mem.nextCheckTarget < CurTime() or not mem.nextCheckTarget then
 		mem.nextCheckTarget = CurTime() + 0.9 + math.random() * 0.2
