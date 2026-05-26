@@ -1,53 +1,3 @@
--- Restore missing DoNodeTrigger
-function D3bot.DoNodeTrigger()
-	local players = D3bot.RemoveObsDeadTgts(player.GetAll())
-	players = D3bot.From(players):Where(function(k, v) return v:Team() ~= TEAM_UNDEAD end).R
-	local ents = table.Add(players, D3bot.GetEntsOfClss(D3bot.NodeDamageEnts))
-	for i, ent in pairs(ents) do
-		-- Placeholder: actual node damage logic should be here
-		-- e.g., ent:D3bot_NodeDamageTick()
-	end
-end
--- Restore missing QueueBotRoleRefresh
-function D3bot.QueueBotRoleRefresh()
-	NextMaintainBotRoles = 0
-	NextNemesisRefresh = 0
-end
--- Ensure timers are defined before use
-local NextNodeDamage = CurTime()
-local NextMaintainBotRoles = CurTime()
--- Restored: SupervisorThinkFunction for global access
-function D3bot.SupervisorThinkFunction()
-	if NextMaintainBotRoles < CurTime() then
-		NextMaintainBotRoles = CurTime() + (D3bot.BotUpdateDelay or 1)
-		D3bot.MaintainBotRoles()
-		D3bot.RefreshZombieNemesisAssignments()
-	end
-
-	-- Self-healing forced-sync: guarantee nemesis bot count always matches living humans
-	do
-		local humans = D3bot.GetAliveHumanTargets()
-		local zombieBots = {}
-		for _, bot in ipairs(D3bot.GetBots()) do
-			if IsValid(bot) and bot:Team() == TEAM_UNDEAD and bot:Alive() and not D3bot.IsZombieMainBot(bot) then
-				table.insert(zombieBots, bot)
-			end
-		end
-		local nemesisCount = #zombieBots
-		local humanCount = #humans
-		if nemesisCount ~= humanCount then
-			-- Force a full bot role and nemesis refresh
-			D3bot.QueueBotRoleRefresh()
-			D3bot.MaintainBotRoles()
-			D3bot.RefreshZombieNemesisAssignments(true)
-		end
-	end
-
-	if (NextNodeDamage or 0) < CurTime() then
-		NextNodeDamage = CurTime() + (D3bot.NodeDamageInterval or 2)
-		D3bot.DoNodeTrigger()
-	end
-end
 local roundStartTime = CurTime()
 local NextNemesisRefresh = CurTime()
 local spawnAsZombieMain = false
@@ -86,66 +36,18 @@ local function kickBotIfBot(bot)
 	end
 end
 
-
--- Multi-slot Z-main support
-D3bot.ZMainBots = D3bot.ZMainBots or {}
-
-function D3bot.GetZombieMainBots()
-	local bots = {}
+function D3bot.GetZombieMainBot()
 	for _, bot in ipairs(D3bot.GetBots()) do
 		if D3bot.IsZombieMainBot(bot) then
-			table.insert(bots, bot)
+			return bot
 		end
 	end
-	return bots
 end
 
 function D3bot.GetZombieMainBotOnZombieTeam()
-	local bots = {}
 	for _, bot in ipairs(D3bot.GetBots()) do
 		if D3bot.IsZombieMainBot(bot) and bot:Team() == TEAM_UNDEAD then
-			table.insert(bots, bot)
-		end
-	end
-	return bots
-end
-
--- API: Spawn a Z-main bot for a slot (returns bot or nil)
-function D3bot.SpawnZMainBot()
-	return spawnManagedBot(TEAM_UNDEAD, D3bot.ZombieMainBotName, true)
-end
-
--- API: Remove a Z-main bot (by entity or slot index)
-function D3bot.RemoveZMainBot(botOrIndex)
-	local bots = D3bot.GetZombieMainBots()
-	if type(botOrIndex) == "number" then
-		local bot = bots[botOrIndex]
-		if IsValid(bot) then
-			return kickBotIfBot(bot)
-		end
-	elseif IsValid(botOrIndex) then
-		return kickBotIfBot(botOrIndex)
-	end
-end
-
--- API: Remove all Z-main bots
-function D3bot.RemoveAllZMainBots()
-	for _, bot in ipairs(D3bot.GetZombieMainBots()) do
-		kickBotIfBot(bot)
-	end
-end
-
--- API: Ensure N Z-main bots exist (fill unclaimed slots)
-function D3bot.EnsureZMainBotCount(count)
-	local bots = D3bot.GetZombieMainBots()
-	local diff = count - #bots
-	if diff > 0 then
-		for i = 1, diff do
-			D3bot.SpawnZMainBot()
-		end
-	elseif diff < 0 then
-		for i = 1, -diff do
-			D3bot.RemoveZMainBot(i)
+			return bot
 		end
 	end
 end
@@ -330,9 +232,11 @@ function D3bot.GetDesiredBotCount()
 end
 
 local spawnAsTeam
+local function spawnManagedBot(team, forcedName, isZombieMain)
+	if isZombieMain and team == TEAM_UNDEAD and IsValid(D3bot.GetZombieMainBotOnZombieTeam()) then
+		return false
+	end
 
-function spawnManagedBot(team, forcedName, isZombieMain)
-	-- Allow multiple Z-main bots for multi-slot system
 	spawnAsTeam = team
 	spawnAsZombieMain = isZombieMain == true
 	if D3bot.UseConsoleBots then
@@ -344,7 +248,6 @@ function spawnManagedBot(team, forcedName, isZombieMain)
 			bot:D3bot_InitializeOrReset()
 			bot.D3bot_Mem.IsZombieMain = spawnAsZombieMain
 		end
-		return bot
 	end
 	spawnAsTeam = nil
 	spawnAsZombieMain = false
@@ -479,99 +382,83 @@ end
 local NextNodeDamage = CurTime()
 local NextMaintainBotRoles = CurTime()
 
-function D3bot.MaintainBotRoles()
-	local desiredCountByTeam = {}
-	local allowedTotal
-	desiredCountByTeam[TEAM_UNDEAD], desiredCountByTeam[TEAM_SURVIVOR], allowedTotal = D3bot.GetDesiredBotCount()
-	local bots = player.GetBots()
-	local botsByTeam = {}
-	local zombieMainBots = D3bot.GetZombieMainBots()
-	local zombieMainCount = #zombieMainBots
-	local hasZombieVolunteerPlayer = D3bot.HasZombieVolunteerPlayer()
-	local effectivePlayerCount = player.GetCount() - zombieMainCount
-	for k, v in ipairs(bots) do
-		if D3bot.IsZombieMainBot(v) then continue end
-		local team = v:Team()
-		botsByTeam[team] = botsByTeam[team] or {}
-		table.insert(botsByTeam[team], v)
+function D3bot.QueueBotRoleRefresh()
+	NextMaintainBotRoles = 0
+	NextNemesisRefresh = 0
+end
+
+hook.Add("PlayerInitialSpawn", D3bot.BotHooksId.."PlayerInitialSpawnSupervisorRefresh", function(pl)
+	if D3bot.IsEnabledCached and not pl.D3bot_Mem then
+		D3bot.QueueBotRoleRefresh()
 	end
-	local players = player.GetAll()
-	local playersByTeam = {}
-	for k, v in ipairs(players) do
-		local team = v:Team()
-		playersByTeam[team] = playersByTeam[team] or {}
-		table.insert(playersByTeam[team], v)
+end)
+
+hook.Add("PlayerSpawn", D3bot.BotHooksId.."PlayerSpawnSupervisorRefresh", function(pl)
+	if D3bot.IsEnabledCached and not pl.D3bot_Mem then
+		D3bot.QueueBotRoleRefresh()
+	end
+end)
+
+hook.Add("PlayerDeath", D3bot.BotHooksId.."PlayerDeathSupervisorRefresh", function(pl)
+	if D3bot.IsEnabledCached and not pl.D3bot_Mem then
+		D3bot.QueueBotRoleRefresh()
+	end
+end)
+
+hook.Add("PlayerDisconnected", D3bot.BotHooksId.."PlayerDisconnectedSupervisorRefresh", function()
+	if D3bot.IsEnabledCached then
+		D3bot.QueueBotRoleRefresh()
+	end
+end)
+
+function D3bot.SupervisorThinkFunction()
+	if NextMaintainBotRoles < CurTime() then
+		NextMaintainBotRoles = CurTime() + (D3bot.BotUpdateDelay or 1)
+		D3bot.MaintainBotRoles()
+		D3bot.RefreshZombieNemesisAssignments()
 	end
 
-	-- Check if any zombie bot is in barricade ghosting mode.
-	for _, bot in ipairs(bots) do
-		if bot:GetBarricadeGhosting() and bot:Team() == TEAM_UNDEAD and bot:Alive() then
-			bot:SetBarricadeGhosting(false)
-		end
-	end
-
-	if botsByTeam[TEAM_UNDEAD] then
-		table.sort(botsByTeam[TEAM_UNDEAD], function(a, b) return (a:GetZombieClassTable().Boss and 1 or 0) > (b:GetZombieClassTable().Boss and 1 or 0) end)
-	end
-	for team, botByTeam in pairs(botsByTeam) do
-		table.sort(botByTeam, function(a, b) return a:Frags() < b:Frags() end)
-	end
-
-	if GAMEMODE:GetWave() > 0 and not GAMEMODE.ZombieEscape and not GAMEMODE.ObjectiveMap then
-		desiredCountByTeam[TEAM_SURVIVOR] = nil
-	end
-
-	if not D3bot.SurvivorsEnabled then
-		desiredCountByTeam[TEAM_SURVIVOR] = 0
-	end
-
-	-- Remove Z-main bots if there are enough volunteers or no humans
-	if (hasZombieVolunteerPlayer or #player.GetHumans() == 0) and zombieMainCount > 0 then
-		D3bot.RemoveAllZMainBots()
-		return
-	end
-
-	-- Move (kill) survivors to undead if possible
-	if desiredCountByTeam[TEAM_SURVIVOR] and desiredCountByTeam[TEAM_UNDEAD] then
-		if #(botsByTeam[TEAM_SURVIVOR] or {}) > desiredCountByTeam[TEAM_SURVIVOR] and #(botsByTeam[TEAM_UNDEAD] or {}) < desiredCountByTeam[TEAM_UNDEAD] and botsByTeam[TEAM_SURVIVOR] then
-			local randomBot = table.remove(botsByTeam[TEAM_SURVIVOR], 1)
-			randomBot:StripWeapons()
-			randomBot:Kill()
-			return
-		end
-	end
-
-	-- Add bots out of managed teams to maintain desired counts
-	if effectivePlayerCount < allowedTotal then
-		for team, desiredCount in pairs(desiredCountByTeam) do
-			if #(botsByTeam[team] or {}) < desiredCount then
-				spawnManagedBot(team)
-				return
+	-- Self-healing forced-sync: guarantee nemesis bot count always matches living humans
+	do
+		local humans = D3bot.GetAliveHumanTargets()
+		local zombieBots = {}
+		for _, bot in ipairs(D3bot.GetBots()) do
+			if IsValid(bot) and bot:Team() == TEAM_UNDEAD and bot:Alive() and not D3bot.IsZombieMainBot(bot) then
+				table.insert(zombieBots, bot)
 			end
 		end
-	end
-
-	-- Multi-slot Z-main logic
-	-- Calculate required Z-main slots (1 per 2 humans, rounded down)
-	local humanCount = #player.GetHumans()
-	local zmainSlots = math.floor(humanCount / 2)
-	-- Remove Z-main bots if too many, add if too few
-	D3bot.EnsureZMainBotCount(zmainSlots)
-
-	-- Remove bots out of managed teams to maintain desired counts
-	for team, desiredCount in pairs(desiredCountByTeam) do
-		if #(botsByTeam[team] or {}) > desiredCount and botsByTeam[team] then
-			local randomBot = table.remove(botsByTeam[team], 1)
-			return kickBotIfBot(randomBot)
+		local nemesisCount = #zombieBots
+		local humanCount = #humans
+		if nemesisCount ~= humanCount then
+			-- Force a full bot role and nemesis refresh
+			D3bot.QueueBotRoleRefresh()
+			D3bot.MaintainBotRoles()
+			D3bot.RefreshZombieNemesisAssignments(true)
 		end
 	end
-	-- Remove bots out of non managed teams if the server is getting too full
-	if effectivePlayerCount > allowedTotal then
-		for team, desiredCount in pairs(desiredCountByTeam) do
-			if not desiredCountByTeam[team] and botsByTeam[team] then
-				local randomBot = table.remove(botsByTeam[team], 1)
-				return kickBotIfBot(randomBot)
+
+	if (NextNodeDamage or 0) < CurTime() then
+		NextNodeDamage = CurTime() + (D3bot.NodeDamageInterval or 2)
+		D3bot.DoNodeTrigger()
+	end
+end
+
+function D3bot.DoNodeTrigger()
+	local players = D3bot.RemoveObsDeadTgts(player.GetAll())
+	players = D3bot.From(players):Where(function(k, v) return v:Team() ~= TEAM_UNDEAD end).R
+	local ents = table.Add(players, D3bot.GetEntsOfClss(D3bot.NodeDamageEnts))
+	for i, ent in pairs(ents) do
+		local nodeOrNil = D3bot.MapNavMesh:GetNearestNodeOrNil(ent:GetPos()) -- TODO: Don't call GetNearestNodeOrNil that often
+		if nodeOrNil then
+			if not D3bot.DisableNodeDamage and type(nodeOrNil.Params.DMGPerSecond) == "number" and nodeOrNil.Params.DMGPerSecond > 0 then
+				ent:TakeDamage(nodeOrNil.Params.DMGPerSecond * (D3bot.NodeDamageInterval or 2), game.GetWorld(), game.GetWorld())
+			end
+			if ent:IsPlayer() and not ent.D3bot_Mem and nodeOrNil.Params.BotMod then
+				D3bot.NodeZombiesCountAddition = nodeOrNil.Params.BotMod
 			end
 		end
 	end
 end
+
+-- TODO: Detect situations and coordinate bots accordingly (Attacking cades, hunt down runners, spawncamping prevention)
+-- TODO: If needed force one bot to flesh creeper and let him build a nest at a good place
