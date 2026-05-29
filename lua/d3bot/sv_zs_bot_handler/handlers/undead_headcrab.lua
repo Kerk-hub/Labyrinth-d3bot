@@ -1,8 +1,8 @@
 D3bot.Handlers.Undead_Headcrab = D3bot.Handlers.Undead_Headcrab or {}
 local HANDLER = D3bot.Handlers.Undead_Headcrab
 
-HANDLER.AngOffshoot = 45
-HANDLER.BotTgtFixationDistMin = 250
+HANDLER.AngOffshoot = 20
+HANDLER.BotTgtFixationDistMin = 200
 HANDLER.PounceInterval = 3 -- Let them pounce every few seconds.
 HANDLER.PounceIntervalPlusRandom = 5 -- Additional random delay.
 

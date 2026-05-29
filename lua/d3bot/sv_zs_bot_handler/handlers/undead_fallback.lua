@@ -1,8 +1,8 @@
 D3bot.Handlers.Undead_Fallback = D3bot.Handlers.Undead_Fallback or {}
 local HANDLER = D3bot.Handlers.Undead_Fallback
 
-HANDLER.AngOffshoot = 45
-HANDLER.BotTgtFixationDistMin = 250
+HANDLER.AngOffshoot = 20
+HANDLER.BotTgtFixationDistMin = 200
 HANDLER.BotClasses = {
 	"Zombie",
 	"Bloated Zombie",
