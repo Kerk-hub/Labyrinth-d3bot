@@ -62,19 +62,6 @@ function D3bot.GetZombieTeamPlayers()
 	return zombiePlayers
 end
 
-function D3bot.HasZombieVolunteerPlayer()
-	local initialVolunteers = GAMEMODE and GAMEMODE.InitialVolunteers
-	if type(initialVolunteers) ~= "table" then return false end
-
-	for _, pl in ipairs(player.GetAll()) do
-		if IsValid(pl) and not pl.D3bot_Mem and pl:Team() == TEAM_UNDEAD and initialVolunteers[pl:UniqueID()] then
-			return true
-		end
-	end
-
-	return false
-end
-
 function D3bot.SelectLegacyZombieTarget(bot, potTargets, canBeTgt, options)
 	options = options or {}
 	local validTargets = {}
@@ -272,7 +259,7 @@ function D3bot.MaintainBotRoles()
 	local botsByTeam = {}
 	local zombieMainBot = D3bot.GetZombieMainBot()
 	local zombieMainCount = IsValid(zombieMainBot) and 1 or 0
-	local hasZombieVolunteerPlayer = D3bot.HasZombieVolunteerPlayer()
+	local hasZombiePlayers = #D3bot.GetZombieTeamPlayers() > 0
 	local effectivePlayerCount = player.GetCount() - zombieMainCount
 	for k, v in ipairs(bots) do
 		if D3bot.IsZombieMainBot(v) then continue end
@@ -318,7 +305,7 @@ function D3bot.MaintainBotRoles()
 		desiredCountByTeam[TEAM_SURVIVOR] = 0
 	end
 
-	if IsValid(zombieMainBot) and (hasZombieVolunteerPlayer or #player.GetHumans() == 0) then
+	if IsValid(zombieMainBot) and (hasZombiePlayers or #player.GetHumans() == 0) then
 		return kickBotIfBot(zombieMainBot)
 	end
 	
@@ -342,7 +329,7 @@ function D3bot.MaintainBotRoles()
 		end
 	end
 
-	if not hasZombieVolunteerPlayer and not IsValid(zombieMainBot) and #player.GetHumans() > 0 and effectivePlayerCount < game.MaxPlayers() then
+	if not hasZombiePlayers and not IsValid(zombieMainBot) and #player.GetHumans() > 0 and effectivePlayerCount < game.MaxPlayers() then
 		spawnManagedBot(TEAM_UNDEAD, D3bot.ZombieMainBotName, true)
 		return
 	end
