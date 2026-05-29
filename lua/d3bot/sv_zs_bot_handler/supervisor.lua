@@ -307,7 +307,7 @@ function D3bot.SupervisorThinkFunction()
 		local humans = D3bot.GetAliveHumanTargets()
 		local zombieBots = {}
 		for _, bot in ipairs(D3bot.GetBots()) do
-			if IsValid(bot) and bot:Team() == TEAM_UNDEAD and bot:Alive() and not D3bot.IsZombieMainBot(bot) then
+			if IsValid(bot) and bot:Team() == TEAM_UNDEAD and bot:Alive() then
 				table.insert(zombieBots, bot)
 			end
 		end
